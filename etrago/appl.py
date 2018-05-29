@@ -71,7 +71,7 @@ args = {# Setup and Configuration:
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': False, # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
         'market_simulation':False,
