@@ -42,10 +42,10 @@ if not 'READTHEDOCS' in os.environ:
     from etrago.tools.utilities import (load_shedding, data_manipulation_sh, convert_capital_costs,
                                     results_to_csv, parallelisation, pf_post_lopf, 
                                     loading_minimization, calc_line_losses, group_parallel_lines,
-				    german_geom, get_foreign_buses, ramp_limits)
+                                    german_geom, get_foreign_buses, ramp_limits)
     from etrago.tools.extendable import extendable
     from etrago.cluster.networkclustering import busmap_from_psql, cluster_on_extra_high_voltage, kmean_clustering
-    from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
+    #from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
     from egoio.tools import db
     from sqlalchemy.orm import sessionmaker
     
