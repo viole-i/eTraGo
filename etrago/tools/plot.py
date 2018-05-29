@@ -27,11 +27,61 @@ import pandas as pd
 import numpy as np
 import time
 import matplotlib
+from matplotlib.colors import LinearSegmentedColormap
 from math import sqrt
 if not 'READTHEDOCS' in os.environ:
     from geoalchemy2.shape import to_shape
 
-
+def shiftedColorMap(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
+        '''
+        Function to offset the "center" of a colormap. Useful for
+        data with a negative min and positive max and you want the
+        middle of the colormap's dynamic range to be at zero
+    
+        Input
+        -----
+          cmap : The matplotlib colormap to be altered
+          start : Offset from lowest point in the colormap's range.
+              Defaults to 0.0 (no lower ofset). Should be between
+              0.0 and `midpoint`.
+          midpoint : The new center of the colormap. Defaults to 
+              0.5 (no shift). Should be between 0.0 and 1.0. In
+              general, this should be  1 - vmax/(vmax + abs(vmin))
+              For example if your data range from -15.0 to +5.0 and
+              you want the center of the colormap at 0.0, `midpoint`
+              should be set to  1 - 5/(5 + 15)) or 0.75
+          stop : Offset from highets point in the colormap's range.
+              Defaults to 1.0 (no upper ofset). Should be between
+              `midpoint` and 1.0.
+        '''
+        cdict = {
+            'red': [],
+            'green': [],
+            'blue': [],
+            'alpha': []
+        }
+    
+        # regular index to compute the colors
+        reg_index = np.linspace(start, stop, 257)
+    
+        # shifted index to match the data
+        shift_index = np.hstack([
+            np.linspace(0.0, midpoint, 128, endpoint=False), 
+            np.linspace(midpoint, 1.0, 129, endpoint=True)
+        ])
+    
+        for ri, si in zip(reg_index, shift_index):
+            r, g, b, a = cmap(ri)
+    
+            cdict['red'].append((si, r, r))
+            cdict['green'].append((si, g, g))
+            cdict['blue'].append((si, b, b))
+            cdict['alpha'].append((si, a, a))
+    
+        newcmap = matplotlib.colors.LinearSegmentedColormap(name, cdict)
+        plt.register_cmap(cmap=newcmap)
+    
+        return newcmap
 
 def add_coordinates(network):
     """
@@ -489,7 +539,8 @@ def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
               'solar':'yellow',
               'uranium':'lime',
               'waste':'sienna',
-              'wind':'skyblue',
+              'wind_onshore':'skyblue',
+              'wind_offshore':'dodgerblue',
               'slack':'pink',
               'load shedding': 'red',
               'nan':'m',
@@ -563,7 +614,8 @@ def plot_gen_diff(networkA, networkB, leave_out_carriers=['geothermal', 'oil',
           'solar':'yellow',
           'uranium':'lime',
           'waste':'sienna',
-          'wind':'skyblue',
+          'wind_onshore':'skyblue',
+          'wind_offshore':'dodgerblue',
           'slack':'pink',
           'load shedding': 'red',
           'nan':'m'}
@@ -571,7 +623,7 @@ def plot_gen_diff(networkA, networkB, leave_out_carriers=['geothermal', 'oil',
     colors = [colors[col] for col in diff.columns]
     
     plot = diff.plot(kind='line', color=colors, use_index=False)
-    plot.legend(loc='upper left', ncol=5, prop={'size': 8})
+    plot.legend(loc='upper left', ncol=5, prop={'size': 12})
     x = []
     for i in range(0, len(diff)):
         x.append(i)
@@ -771,14 +823,13 @@ def gen_dist(network, techs=None, snapshot=0, n_cols=3,gen_size=0.2, filename=No
        plt.savefig(filename)
        plt.close()
 
-def gen_dist_diff(networkA, networkB, techs=None, snapshot=0, n_cols=3,gen_size=0.2, filename=None, buscmap=plt.cm.jet):
+def gen_dist_diff(networkA, networkB, techs=None, snapshot='all', 
+                  n_cols=3,gen_size=0.2, filename=None):
 
     """
-    Difference in generation distribution
-    Green/Yellow/Red colors mean that the generation at a location is bigger with switches 
-    than without
-    Blue colors mean that the generation at a location is smaller with switches
-    than without
+    Difference in generation distribution networkA - networkB.
+    If A is network and B is market, green means redispatch upwards and red means
+    redispatch downwards.
     ----------
     networkA : PyPSA network container
         Holds topology of grid with switches
@@ -817,34 +868,283 @@ def gen_dist_diff(networkA, networkB, techs=None, snapshot=0, n_cols=3,gen_size=
     size = 4
 
     fig.set_size_inches(size*n_cols,size*n_rows)
+    
+    if snapshot == 'all':
+        loading_c = (networkA.lines_t.p0.mean()/(networkA.lines.s_nom)) * 100 
+        loading = abs(loading_c)
+    else:
+        loading_c = (networkA.lines_t.p0.loc[networkA.snapshots[snapshot]]/ \
+                     (networkA.lines.s_nom)) * 100 
+        loading = abs(loading_c)
 
     for i,tech in enumerate(techs):
         i_row = i // n_cols
         i_col = i % n_cols
-    
-        ax = axes[i_row,i_col]
+        one_plot = False
+        
+        if type(axes) == np.ndarray:
+            try:
+                ax = axes[i_row,i_col]
+            except:
+                ax = axes[i]
+        else:
+            one_plot = True
+            ax = axes
     
         gensA = networkA.generators[networkA.generators.carrier == tech]
         gensB = networkB.generators[networkB.generators.carrier == tech]
         
-        gen_distribution = networkA.generators_t.p[gensA.index].\
-        loc[networkA.snapshots[snapshot]].groupby(networkA.generators.bus).sum().\
-        reindex(networkA.buses.index,fill_value=0.) - networkB.generators_t.p[gensB.index].\
-        loc[networkB.snapshots[snapshot]].groupby(networkB.generators.bus).sum().\
-        reindex(networkB.buses.index,fill_value=0.)
-    
-        networkA.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
-                      bus_colors=gen_distribution, line_widths=0.1, bus_cmap=buscmap)
-    
-        ax.set_title(tech)
-
+        if snapshot == 'all':
+            gen_distribution = (networkA.generators_t.p[gensA.index].\
+            sum().groupby(networkA.generators.bus).sum().\
+            reindex(networkA.buses.index,fill_value=0.) 
+            - networkB.generators_t.p[gensB.index].\
+            sum().groupby(networkB.generators.bus).sum().\
+            reindex(networkB.buses.index,fill_value=0.))  
+        else:    
+            gen_distribution = networkA.generators_t.p[gensA.index].\
+            loc[networkA.snapshots[snapshot]].groupby(networkA.generators.bus).sum().\
+            reindex(networkA.buses.index,fill_value=0.) - networkB.generators_t.p[gensB.index].\
+            loc[networkB.snapshots[snapshot]].groupby(networkB.generators.bus).sum().\
+            reindex(networkB.buses.index,fill_value=0.)
         
+        if max(gen_distribution) != 0 or min(gen_distribution) != 0:
+            midpoint = 1 - max(gen_distribution)/(max(gen_distribution) 
+            + abs(min(gen_distribution)))  
+        else:
+            midpoint = 0
+            
+        cdict = {'green':  ((0.0, 0.0, 0.0),
+                     (1/6., 0.0, 0.0),
+                     (1/2., 0.8, 1.0),
+                     (5/6., 1.0, 1.0),
+                     (1.0, 0.4, 1.0)),
+    
+                 'red':  ((0.0, 0.0, 0.4),
+                     (1/6., 1.0, 1.0),
+                     (1/2., 1.0, 0.8),
+                     (5/6., 0.0, 0.0),
+                     (1.0, 0.0, 0.0)),
+    
+                 'blue': ((0.0, 0.0, 0.0),
+                     (1/6., 0.0, 0.0),
+                     (1/2., 0.9, 0.9),
+                     (5/6., 0.0, 0.0),
+                     (1.0, 0.0, 0.0))
+            }
+    
+        cmap=LinearSegmentedColormap('rg',cdict, N=256)
+        shifted_cmap=shiftedColorMap(cmap, midpoint=midpoint, name='shifted')
+        
+        if one_plot:
+            ll = networkA.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
+              bus_colors=gen_distribution, line_widths=0.55, 
+              bus_cmap=shifted_cmap, line_colors=loading, 
+              line_cmap=plt.cm.jet)
+            cb_bus = plt.colorbar(ll[0], ax=ax)
+            cb_line = plt.colorbar(ll[1], ax=ax)
+            cb_bus.set_label('Redispatch in MWh')
+            cb_line.set_label('Line loading in %')
+        else:
+            ll = networkA.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
+              bus_colors=gen_distribution, line_widths=0.1, 
+              bus_cmap=shifted_cmap)
+            cb_bus = plt.colorbar(ll[0], ax=ax)
+        
+        ax.set_title(tech)
+            
     if filename is None:
        plt.show()
     else:
        plt.savefig(filename)
        plt.close()
 
+def plot_redispatch(network, market, techs=None, snapshot='all', 
+                  n_cols=3,gen_size=0.2, filename=None):
+    """
+    Difference in generation distribution network - market.
+    If first is network and second is market, green means redispatch upwards and red means
+    redispatch downwards.
+    ----------
+    networkA : PyPSA network container
+        Holds topology of grid with switches
+        including results from powerflow analysis
+    networkB : PyPSA network container
+        Holds topology of grid without switches
+        including results from powerflow analysis
+    techs : dict 
+        type of technologies which shall be plotted
+    snapshot : int
+        snapshot
+    n_cols : int 
+        number of columns of the plot
+    gen_size : num 
+        size of generation bubbles at the buses
+    filename : str
+        Specify filename
+        If not given, figure will be show directly
+    """
+    if techs is None:
+        techs = network.generators.carrier.unique()
+    else:
+        techs = techs
+
+    n_graphs = len(techs)
+    n_cols = n_cols
+
+    if n_graphs % n_cols == 0:
+        n_rows = n_graphs // n_cols
+    else:
+        n_rows = n_graphs // n_cols + 1
+        
+    fig, axes = plt.subplots(nrows=n_rows, ncols=n_cols)
+    fig.suptitle("Difference in Generation", fontsize=20)
+    fig.text(0.94, 0.5, 'Generation in MWh', va='center', 
+             rotation='vertical', fontsize=16)
+
+    size = 4
+
+    fig.set_size_inches(size*n_cols,size*n_rows)
+    
+    if snapshot == 'all':
+        loading_c = (network.lines_t.p0.mean()/(network.lines.s_nom)) * 100 
+        loading = abs(loading_c)
+    else:
+        loading_c = (network.lines_t.p0.loc[network.snapshots[snapshot]]/ \
+                     (network.lines.s_nom)) * 100 
+        loading = abs(loading_c)
+    
+    network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
+    market.buses[['x', 'y']] = market.buses[['x', 'y']].round(4)
+    
+    # corresponding buses for networks with different number of buses  
+# =============================================================================
+#     try:
+#         network.buses.drop('corresponding_bus', axis=1, inplace=True)
+#         market.buses.drop('corresponding_bus', axis=1, inplace=True)
+#     except:
+#         pass
+# 
+#     foreign_network = network.buses.loc[network.foreign_buses]
+#     for index, row in foreign_network.iterrows():
+#         ix = np.where((market.buses['x'] == row['x']) & \
+#                  (market.buses['y'] == row['y']))
+#         for i in ix:
+#             market.buses.ix[i, 'corresponding_bus'] = index
+#     
+#     network.buses.loc[foreign_network.index, 'corresponding_bus'] = foreign_network.index
+#     
+#     fill_value = network.buses[(round(network.buses['x']) == 10) & \
+#                                (round(network.buses['y']) == 51)].iloc[0].name
+#     
+#     market.buses['corresponding_bus'].fillna(fill_value, inplace=True)
+#     network.buses['corresponding_bus'].fillna(fill_value, inplace=True)
+# =============================================================================
+
+    # corresponding buses for networks with same number of buses  
+    for index, row in network.buses[2:3].iterrows():
+        market.buses[(market.buses['x'] == row['x']) & \
+        (market.buses['y'] == row['y']), 'corresponding_bus'] == index
+        ix = np.where((market.buses['x'] == row['x']) & \
+        (market.buses['y'] == row['y']))
+        network.buses.loc[row.name, 'corresponding_bus'] = index
+        for i in ix:
+            market.buses.ix[i, 'corresponding_bus'] = index
+            
+        
+    for i,tech in enumerate(techs):
+        i_row = i // n_cols
+        i_col = i % n_cols
+        one_plot = False
+        
+        if type(axes) == np.ndarray:
+            try:
+                ax = axes[i_row,i_col]
+            except:
+                ax = axes[i]
+        else:
+            one_plot = True
+            ax = axes
+        
+        if tech == 'all':
+            gensN = network.generators
+            gensM = market.generators
+        else:
+            gensN = network.generators[network.generators.carrier == tech]
+            gensM = market.generators[market.generators.carrier == tech]
+        
+        if snapshot == 'all':
+            gen_distribution = (network.generators_t.p[gensN.index].\
+            sum().groupby(network.generators.bus).sum().\
+            reindex(network.buses.index,fill_value=0.).\
+            groupby(network.buses.corresponding_bus).sum() - \
+            market.generators_t.p[gensM.index].\
+            sum().groupby(market.generators.bus).sum().\
+            reindex(market.buses.index,fill_value=0.).\
+            groupby(market.buses.corresponding_bus).sum()).fillna(0)
+        else:    
+            gen_distribution = (network.generators_t.p[gensN.index].\
+            loc[network.snapshots[snapshot]].groupby(network.generators.bus).\
+            sum().reindex(network.buses.index,fill_value=0.).\
+            groupby(network.buses.corresponding_bus).sum() - \
+            market.generators_t.p[gensM.index].loc[market.snapshots[snapshot]].\
+            groupby(market.generators.bus).sum().\
+            reindex(market.buses.index,fill_value=0.).\
+            groupby(market.buses.corresponding_bus).sum()).fillna(0)
+        
+        if max(gen_distribution) != 0 or min(gen_distribution) != 0:
+            midpoint = 1 - max(gen_distribution)/(max(gen_distribution) 
+            + abs(min(gen_distribution)))  
+        else:
+            midpoint = 0
+            
+        cdict = {'green':  ((0.0, 0.0, 0.0),
+                     (1/6., 0.0, 0.0),
+                     (1/2., 0.8, 1.0),
+                     (5/6., 1.0, 1.0),
+                     (1.0, 0.4, 1.0)),
+    
+                 'red':  ((0.0, 0.0, 0.4),
+                     (1/6., 1.0, 1.0),
+                     (1/2., 1.0, 0.8),
+                     (5/6., 0.0, 0.0),
+                     (1.0, 0.0, 0.0)),
+    
+                 'blue': ((0.0, 0.0, 0.0),
+                     (1/6., 0.0, 0.0),
+                     (1/2., 0.9, 0.9),
+                     (5/6., 0.0, 0.0),
+                     (1.0, 0.0, 0.0))
+            }
+    
+        cmap=LinearSegmentedColormap('rg',cdict, N=256)
+        shifted_cmap=shiftedColorMap(cmap, midpoint=midpoint, name='shifted')
+        
+        if one_plot:
+            ll = network.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
+              bus_colors=gen_distribution, line_widths=0.55, 
+              bus_cmap=shifted_cmap, line_colors=loading, 
+              line_cmap=plt.cm.jet)
+            cb_bus = plt.colorbar(ll[0], ax=ax)
+            cb_line = plt.colorbar(ll[1], ax=ax)
+            cb_bus.set_label('Redispatch in MWh')
+            cb_line.set_label('Line loading in %')
+        else:
+            ll = network.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
+              bus_colors=gen_distribution, line_widths=0.1, 
+              bus_cmap=shifted_cmap)
+            cb_bus = plt.colorbar(ll[0], ax=ax)
+        
+        #print(tech, gen_distribution)
+        #print(fill_value)
+        
+        ax.set_title(tech)       
+    if filename is None:
+       plt.show()
+    else:
+       plt.savefig(filename)
+       plt.close()
+    
 def gen_dist(network, techs=None, snapshot=1, n_cols=3,gen_size=0.2, filename=None):
 
     """

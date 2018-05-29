@@ -25,8 +25,25 @@ import pandas as pd
 import numpy as np
 import os
 import time
+from egoio.tools import db
+from egoio.db_tables.boundaries import BkgVg2501Sta
+from egoio.db_tables.model_draft import EgoGridHvElectricalNeighboursBus as NeighboursBus
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import and_
+from geoalchemy2.shape import to_shape
+from shapely.geometry import MultiPoint
 from pyomo.environ import (Var,Constraint, PositiveReals,ConcreteModel)
 
+def german_geom(section='marlon'):
+    
+    conn = db.connection(section=section)
+    Session = sessionmaker(bind=conn)
+    session = Session()
+    query = session.query(BkgVg2501Sta.geom.ST_Transform(4326)).\
+            filter(and_(BkgVg2501Sta.reference_date == '2015-01-01', BkgVg2501Sta.id == 9))
+    geom = [geom for geom in query.all()]
+    wkt_geom = to_shape(geom[0][0])
+    return wkt_geom
 
 def buses_of_vlvl(network, voltage_level):
     """ Get bus-ids of given voltage level(s).
@@ -352,6 +369,97 @@ def parallelisation(network, start_snapshot, end_snapshot, group_size, solver_na
     z = (y - x) / 60
     print(z)
     return
+
+
+def get_foreign_buses(network, geom):
+    geom = geom.buffer(0.5)
+    coords = network.buses[['x', 'y']]
+    coords = [tuple(x) for x in coords.values]
+    buses = MultiPoint(coords)
+
+    index_foreign_buses = []
+    for i, pt in enumerate(buses):
+        if pt.within(geom) == False:
+             index_foreign_buses.append(i)
+    network.foreign_buses = network.buses.iloc[index_foreign_buses].index
+
+def get_transborder_flows(network):
+    #positive = imports
+    if network.lines.empty == False:
+        transborder_lines_0 = network.lines[network.lines['bus0'].\
+                                            isin(network.foreign_buses)].index
+        transborder_lines_1 = network.lines[network.lines['bus1'].\
+                                            isin(network.foreign_buses)].index
+        
+        network.foreign_trade = network.lines_t.p0[transborder_lines_0].sum(axis=1) +\
+            network.lines_t.p1[transborder_lines_1].sum(axis=1)
+    else:
+        transborder_lines_0 = network.links[network.links['bus0'].\
+                                            isin(network.foreign_buses)].index
+        transborder_lines_1 = network.links[network.links['bus1'].\
+                                            isin(network.foreign_buses)].index
+        
+        network.foreign_trade = network.links_t.p0[transborder_lines_0].sum(axis=1) +\
+            network.links_t.p1[transborder_lines_1].sum(axis=1)
+        
+def market_simulation(network, method):
+    
+    neighbours = network.foreign_buses
+    network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.lines['bus0'].values,
+                                                           'bus1' : network.lines['bus1'].values,
+                                                           'p_nom' : float('Inf'),
+                                                           'p_min_pu' : -1},
+                                                            index=network.lines.index+'Link'),
+                                                            'Link')
+# =============================================================================
+#     neighbours = (
+#     '1025', '2625', '7230', '8035', '9271', '11353', '11601', '12093', '12127', '12128',
+#     '12205', '12402', '12436', '12653', '12733', '13182', '13339', '15182', '25533',
+#     '28405', '28406', '28407', '28408', '28409', '28410', '28413', '28414', '28415', '28416',
+#     '28417', '28418', '28419', '28421', '28422', '28425', '28426', '28427', '28428', '28431'
+#     )
+# =============================================================================
+    
+    mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
+            (network.links['bus1'].isin(neighbours) == True)].index
+            
+    if method == 'ntc':
+        corr_factor = 0.6
+        network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
+                     loc[[a[:-4] for a in mask]].values)*corr_factor
+        network.lines.drop(network.lines.index, inplace=True)
+    if method == 'fbmc':
+        network.links.drop(mask, inplace=True)
+        network.lines = network.lines.loc[[a[:-4] for a in mask]]
+        
+    network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.transformers['bus0'].values,
+                                                           'bus1' : network.transformers['bus1'].values,
+                                                           'p_nom' : 1000000,
+                                                           'p_min_pu' : -1},
+                                                            index=network.transformers.index+'TrafoLink'),
+                                                            'Link')
+    network.transformers.drop(network.transformers.index, inplace=True)
+    return
+
+def ramp_limits(network):
+    carrier = ['coal', 'biomass', 'gas', 'oil', 'waste', 'lignite',
+                       'uranium', 'geothermal']
+    data = {'start_up_cost':[75, 57, 42, 57, 57, 75, 50, 57],
+            'min_up_time':[5, 2, 3, 2, 2, 5, 12, 2], #Quelle:WPEN2015-05
+            'min_down_time':[7, 2, 4, 2, 2, 7, 24, 2], #Quelle:WPEN2015-05
+            'ramp_limit_start_up':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7], #Quelle:WPEN2015-05
+            'ramp_limit_shut_down':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7] #Quelle:WPEN2015-05
+            #'p_min_pu':[0.33, 0.38, 0.4, 0.38, 0.38, 0.5, 0.45, 0.38]
+            }
+    df = pd.DataFrame(data, index=carrier)
+    for tech in df.index:
+        for limit in df.columns:
+            network.generators.loc[network.generators.carrier == tech, 
+                                   limit] = df.loc[tech, limit]
+    network.generators.start_up_cost = network.generators.start_up_cost\
+                                        *network.generators.p_nom
+    network.generators.commitable = True
+    
 
 def pf_post_lopf(network, scenario):
     

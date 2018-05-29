@@ -23,6 +23,7 @@ __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "ulfmueller, lukasol, wolfbunke, mariusves, s3pp"
 """
 import numpy as np
+import pandas as pd
 from numpy import genfromtxt
 np.random.seed()
 import time
@@ -40,40 +41,46 @@ if not 'READTHEDOCS' in os.environ:
 
     from etrago.tools.utilities import (load_shedding, data_manipulation_sh, convert_capital_costs,
                                     results_to_csv, parallelisation, pf_post_lopf, 
-                                    loading_minimization, calc_line_losses, group_parallel_lines)
+                                    loading_minimization, calc_line_losses, group_parallel_lines,
+				    german_geom, get_foreign_buses, ramp_limits)
     from etrago.tools.extendable import extendable
     from etrago.cluster.networkclustering import busmap_from_psql, cluster_on_extra_high_voltage, kmean_clustering
     from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
     from egoio.tools import db
     from sqlalchemy.orm import sessionmaker
+    
+x = time.time()
 
 args = {# Setup and Configuration:
-        'db': 'oedb', # db session
-        'gridversion': 'v0.3.1', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
+        'db': 'marlon', # db session
+        'gridversion': 'v0.3.0pre1', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
-        'start_snapshot': 2880,
-        'end_snapshot' : 2881, #3624,
+        'start_snapshot': 4500,
+        'end_snapshot' : 4600,
         'solver': 'gurobi', # glpk, cplex or gurobi
-        'scn_name': 'NEP 2035', # # choose a scenario: Status Quo, NEP 2035, eGo100
+        'scn_name': 'Status Quo', # # choose a scenario: Status Quo, NEP 2035, eGo100
             # Scenario variations:
             'scn_extension': None, # None or name of additional scenario (in extension_tables) e.g. 'nep2035_b2'
             'scn_decommissioning': None, # None or name of decommissioning-scenario (in extension_tables) e.g. 'nep2035_b2'
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': False,# state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/testkmean2', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
-        'extendable':['storages'], # None or array of components you want to optimize (e.g. ['network', 'storages'])
+        'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': False,# state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
+        'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
+        'market_simulation':False,
+        'ramp_limits':False,
         # Clustering:
-        'network_clustering_kmeans':10, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).
+        'network_clustering_kmeans':100, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).
         'load_cluster': False, # state if you want to load cluster coordinates from a previous run: False or /path/tofile (filename similar to ./cluster_coord_k_n_result)
         'network_clustering_ehv': False, # state if you want to perform a clustering of HV buses to EHV buses.
-        'snapshot_clustering':3, # False or the number of 'periods' you want to cluster to. Move to PyPSA branch:features/snapshot_clustering
+        'snapshot_clustering':False, # False or the number of 'periods' you want to cluster to. Move to PyPSA branch:features/snapshot_clustering
         # Simplifications:
         'parallelisation':False, # state if you want to run snapshots parallely.
         'skip_snapshots':False,
@@ -85,8 +92,8 @@ args = {# Setup and Configuration:
 
 def etrago(args):
     """The etrago function works with following arguments:
-
-
+    
+    
     Parameters
     ----------
 
@@ -279,10 +286,27 @@ def etrago(args):
 
     # set extra_functionality to default
     extra_functionality=None
+        
+    if args['use_cleaned_snom']:
+        try:
+            new_snom_lines = pd.Series.from_csv('lines_opt.csv')
+            index = [str(x) for x in new_snom_lines.index]
+            network.lines['s_nom'].loc[index] = new_snom_lines.values
+        except:
+            print('No corrected line values found.')
+            
+        try:
+            new_snom_transformers = pd.Series.from_csv('transformers_opt.csv')
+            index = [str(x) for x in new_snom_transformers.index]
+            network.transformers['s_nom'].loc[index] = new_snom_transformers.values
+        except:
+            print('No corrected transformer values found.')
+        
+    
 
     if args['generator_noise']:
-        # create or reproduce generator noise
-        if not args['reproduce_noise'] == False:
+        # create or reproduce generator noise 
+        if not args['reproduce_noise'] == False:    
             noise_values = genfromtxt('noise_values.csv', delimiter=',')
             # add random noise to all generator
             network.generators.marginal_cost = noise_values
@@ -315,6 +339,9 @@ def etrago(args):
                                    line_length_factor= 1.25, remove_stubs=True, 
                                    use_reduced_coordinates=False, bus_weight_tocsv=None, 
                                    bus_weight_fromcsv=None)
+    
+    geom = german_geom(args['db'])
+    get_foreign_buses(network, geom)
 
     # Branch loading minimization
     if args['minimize_loading']:
@@ -336,11 +363,17 @@ def etrago(args):
     if args ['extendable'] != None:
         network = extendable(network, args['extendable'], args ['scn_extension'])
         network = convert_capital_costs(network, args['start_snapshot'], args['end_snapshot'])
-    
     if args['branch_capacity_factor']:
         network.lines.s_nom = network.lines.s_nom*args['branch_capacity_factor']
         network.transformers.s_nom = network.transformers.s_nom*args['branch_capacity_factor']
-        
+      
+    if args['market_simulation']:
+        market_simulation(network, args['market_simulation'])
+    
+    if args['ramp_limits']:
+        ramp_limits(network)
+   
+      
      #load shedding in order to hunt infeasibilities
     if args['load_shedding']:
         load_shedding(network)
