@@ -372,16 +372,31 @@ def parallelisation(network, start_snapshot, end_snapshot, group_size, solver_na
 
 
 def get_foreign_buses(network, geom):
-    geom = geom.buffer(0.5)
+    geom = geom.buffer(0.075)
     coords = network.buses[['x', 'y']]
     coords = [tuple(x) for x in coords.values]
     buses = MultiPoint(coords)
-
+    
+    network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
+    bus_by_country = {'FR': [1.7186, 46.7737],
+                      'CH': [8.1902, 46.7662],
+                      'AT': [14.1584, 47.5871],
+                      'CZ': [15.4750, 49.8710],
+                      'PL': [19.1343, 51.8784],
+                      'SE': [12.9013, 57.6655],
+                      'DK': [9.3481, 56.2345],
+                      'NL': [5.3302, 52.1690],
+                      'LU': [6.1957, 49.8167]
+                      }
     index_foreign_buses = []
     for i, pt in enumerate(buses):
         if pt.within(geom) == False:
              index_foreign_buses.append(i)
     network.foreign_buses = network.buses.iloc[index_foreign_buses].index
+    for item in bus_by_country.items():
+        network.buses.loc[(network.buses.x == item[1][0]) & 
+                      (network.buses.y == item[1][1]), 'country'] = item[0]
+    network.buses['country'].fillna('DE', inplace=True)
 
 def get_transborder_flows(network):
     #positive = imports
@@ -391,18 +406,53 @@ def get_transborder_flows(network):
         transborder_lines_1 = network.lines[network.lines['bus1'].\
                                             isin(network.foreign_buses)].index
         
-        network.foreign_trade = network.lines_t.p0[transborder_lines_0].sum(axis=1) +\
-            network.lines_t.p1[transborder_lines_1].sum(axis=1)
+        #set country tag for lines
+        network.lines.loc[transborder_lines_0, 'country'] = \
+        network.buses.loc[network.lines.loc[transborder_lines_0, 'bus0'].values,
+                          'country'].values
+        
+        network.lines.loc[transborder_lines_1, 'country'] = \
+        network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
+                          'country'].values
+        network.lines['country'].fillna('DE', inplace=True)
+        #identify lines between two foreign buses (no impact on trade) and delete
+        doubles = list(set(network.lines_t.p0[transborder_lines_0].columns).\
+                       intersection(network.lines_t.p1[transborder_lines_1].columns))
+        transborder_lines_0 = transborder_lines_0.drop(doubles)
+        transborder_lines_1 = transborder_lines_1.drop(doubles)
+        
+        #trade per coutnry
+        network.foreign_trade = pd.concat([network.lines_t.p0[transborder_lines_0], 
+                  network.lines_t.p1[transborder_lines_1]], axis=1).\
+                  groupby(network.lines['country'], axis=1).sum()                                    
+
     else:
         transborder_lines_0 = network.links[network.links['bus0'].\
                                             isin(network.foreign_buses)].index
         transborder_lines_1 = network.links[network.links['bus1'].\
                                             isin(network.foreign_buses)].index
+        # set country tag for lines
+        network.links.loc[transborder_lines_0, 'country'] = \
+        network.buses.loc[network.links.loc[transborder_lines_0, 'bus0'].values,
+                          'country'].values
         
-        network.foreign_trade = network.links_t.p0[transborder_lines_0].sum(axis=1) +\
-            network.links_t.p1[transborder_lines_1].sum(axis=1)
+        network.links.loc[transborder_lines_1, 'country'] = \
+        network.buses.loc[network.links.loc[transborder_lines_1, 'bus1'].values,
+                          'country'].values
+        network.links['country'].fillna('DE', inplace=True)
         
-def market_simulation(network, method):
+        #identify lines between two foreign buses (no impact on trade) and delete
+        doubles = list(set(network.links_t.p0[transborder_lines_0].columns).\
+                       intersection(network.links_t.p1[transborder_lines_1].columns))
+        transborder_lines_0 = transborder_lines_0.drop(doubles)
+        transborder_lines_1 = transborder_lines_1.drop(doubles)
+        
+        #trade per country
+        network.foreign_trade = pd.concat([network.links_t.p0[transborder_lines_0], 
+                  network.links_t.p1[transborder_lines_1]], axis=1).\
+                  groupby(network.links['country'], axis=1).sum()
+        
+def market_simulation(network):
     
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.lines['bus0'].values,
@@ -423,14 +473,11 @@ def market_simulation(network, method):
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
             
-    if method == 'ntc':
-        corr_factor = 0.6
-        network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
-                     loc[[a[:-4] for a in mask]].values)*corr_factor
-        network.lines.drop(network.lines.index, inplace=True)
-    if method == 'fbmc':
-        network.links.drop(mask, inplace=True)
-        network.lines = network.lines.loc[[a[:-4] for a in mask]]
+    
+    corr_factor = 0.6
+    network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
+                 loc[[a[:-4] for a in mask]].values)*corr_factor
+    network.lines.drop(network.lines.index, inplace=True)
         
     network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.transformers['bus0'].values,
                                                            'bus1' : network.transformers['bus1'].values,
@@ -444,14 +491,20 @@ def market_simulation(network, method):
 def ramp_limits(network):
     carrier = ['coal', 'biomass', 'gas', 'oil', 'waste', 'lignite',
                        'uranium', 'geothermal']
-    data = {'start_up_cost':[75, 57, 42, 57, 57, 75, 50, 57],
-            'min_up_time':[5, 2, 3, 2, 2, 5, 12, 2], #Quelle:WPEN2015-05
-            'min_down_time':[7, 2, 4, 2, 2, 7, 24, 2], #Quelle:WPEN2015-05
-            'ramp_limit_start_up':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7], #Quelle:WPEN2015-05
-            'ramp_limit_shut_down':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7] #Quelle:WPEN2015-05
+    data = {'start_up_cost':[77, 57, 42, 57, 57, 77, 50, 57], #in €/MW
+            'start_up_fuel':[4.3, 2.8, 1.45, 2.8, 2.8, 4.3, 16.7, 2.8], #in MWh/MW
+            'min_up_time':[5, 2, 3, 2, 2, 5, 12, 2], 
+            'min_down_time':[7, 2, 2, 2, 2, 7, 17, 2], 
+            'ramp_limit_start_up':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7], 
+            'ramp_limit_shut_down':[0.7, 0.7, 0.7, 0.7, 0.7, 0.8, 0.75, 0.7] 
             #'p_min_pu':[0.33, 0.38, 0.4, 0.38, 0.38, 0.5, 0.45, 0.38]
             }
     df = pd.DataFrame(data, index=carrier)
+    fuel_costs = network.generators.marginal_cost.groupby(
+            network.generators.carrier).mean()[carrier]
+    df['start_up_fuel'] = df['start_up_fuel']*fuel_costs
+    df['start_up_cost'] = df['start_up_cost'] + df['start_up_fuel']
+    df.drop('start_up_fuel', axis=1, inplace=True)
     for tech in df.index:
         for limit in df.columns:
             network.generators.loc[network.generators.carrier == tech, 

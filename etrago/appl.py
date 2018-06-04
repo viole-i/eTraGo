@@ -42,7 +42,8 @@ if not 'READTHEDOCS' in os.environ:
     from etrago.tools.utilities import (load_shedding, data_manipulation_sh, convert_capital_costs,
                                     results_to_csv, parallelisation, pf_post_lopf, 
                                     loading_minimization, calc_line_losses, group_parallel_lines,
-                                    german_geom, get_foreign_buses, ramp_limits)
+                                    german_geom, get_foreign_buses, ramp_limits,
+                                    market_simulation)
     from etrago.tools.extendable import extendable
     from etrago.cluster.networkclustering import busmap_from_psql, cluster_on_extra_high_voltage, kmean_clustering
     #from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
@@ -53,7 +54,7 @@ x = time.time()
 
 args = {# Setup and Configuration:
         'db': 'marlon', # db session
-        'gridversion': 'v0.3.0pre1', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
+        'gridversion': 'v0.3.2', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
         'start_snapshot': 4500,
@@ -66,19 +67,19 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/testkmean2', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/market_4500_corr', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': False, # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
-        'market_simulation':False,
+        'market_simulation':'ntc',
         'ramp_limits':False,
         # Clustering:
         'network_clustering_kmeans':100, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).
-        'load_cluster': False, # state if you want to load cluster coordinates from a previous run: False or /path/tofile (filename similar to ./cluster_coord_k_n_result)
+        'load_cluster': 'cluster_coord_k_100_result', # state if you want to load cluster coordinates from a previous run: False or /path/tofile (filename similar to ./cluster_coord_k_n_result)
         'network_clustering_ehv': False, # state if you want to perform a clustering of HV buses to EHV buses.
         'snapshot_clustering':False, # False or the number of 'periods' you want to cluster to. Move to PyPSA branch:features/snapshot_clustering
         # Simplifications:

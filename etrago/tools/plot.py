@@ -514,7 +514,7 @@ def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
                        groupby(network.generators.carrier, axis=1).sum()
         load = network.loads_t.p.sum(axis=1)
         if hasattr(network, 'foreign_trade'):
-            trade_sum = network.foreign_trade.sum(axis=1)
+            trade_sum = network.foreign_trade
             p_by_carrier['imports'] = trade_sum[trade_sum > 0]
             p_by_carrier['imports'] = p_by_carrier['imports'].fillna(0)
     # sum for a single bus
@@ -539,7 +539,7 @@ def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
               'solar':'yellow',
               'uranium':'lime',
               'waste':'sienna',
-              'wind_onshore':'skyblue',
+              'wind':'skyblue',
               'wind_offshore':'dodgerblue',
               'slack':'pink',
               'load shedding': 'red',
@@ -614,7 +614,7 @@ def plot_gen_diff(networkA, networkB, leave_out_carriers=['geothermal', 'oil',
           'solar':'yellow',
           'uranium':'lime',
           'waste':'sienna',
-          'wind_onshore':'skyblue',
+          'wind':'skyblue',
           'wind_offshore':'dodgerblue',
           'slack':'pink',
           'load shedding': 'red',
@@ -1017,8 +1017,8 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
     network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
     market.buses[['x', 'y']] = market.buses[['x', 'y']].round(4)
     
-    # corresponding buses for networks with different number of buses  
 # =============================================================================
+#     # corresponding buses for networks with different number of buses  
 #     try:
 #         network.buses.drop('corresponding_bus', axis=1, inplace=True)
 #         market.buses.drop('corresponding_bus', axis=1, inplace=True)
@@ -1041,15 +1041,17 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
 #     network.buses['corresponding_bus'].fillna(fill_value, inplace=True)
 # =============================================================================
 
-    # corresponding buses for networks with same number of buses  
-    for index, row in network.buses[2:3].iterrows():
-        market.buses[(market.buses['x'] == row['x']) & \
-        (market.buses['y'] == row['y']), 'corresponding_bus'] == index
-        ix = np.where((market.buses['x'] == row['x']) & \
-        (market.buses['y'] == row['y']))
-        network.buses.loc[row.name, 'corresponding_bus'] = index
-        for i in ix:
-            market.buses.ix[i, 'corresponding_bus'] = index
+# =============================================================================
+#     # corresponding buses for networks with same number of buses  
+#     for index, row in network.buses[2:3].iterrows():
+#         market.buses[(market.buses['x'] == row['x']) & \
+#         (market.buses['y'] == row['y']), 'corresponding_bus'] == index
+#         ix = np.where((market.buses['x'] == row['x']) & \
+#         (market.buses['y'] == row['y']))
+#         network.buses.loc[row.name, 'corresponding_bus'] = index
+#         for i in ix:
+#             market.buses.ix[i, 'corresponding_bus'] = index
+# =============================================================================
             
         
     for i,tech in enumerate(techs):
@@ -1072,25 +1074,26 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
         else:
             gensN = network.generators[network.generators.carrier == tech]
             gensM = market.generators[market.generators.carrier == tech]
-        
+ # für auskommentierte sachen oben: 4 mal das zweite grouby network.buses.index
+# durch network.buses.corresponding_bus ersetzen       
         if snapshot == 'all':
             gen_distribution = (network.generators_t.p[gensN.index].\
             sum().groupby(network.generators.bus).sum().\
             reindex(network.buses.index,fill_value=0.).\
-            groupby(network.buses.corresponding_bus).sum() - \
+            groupby(network.buses.index).sum() - \
             market.generators_t.p[gensM.index].\
             sum().groupby(market.generators.bus).sum().\
             reindex(market.buses.index,fill_value=0.).\
-            groupby(market.buses.corresponding_bus).sum()).fillna(0)
+            groupby(market.buses.index).sum()).fillna(0)
         else:    
             gen_distribution = (network.generators_t.p[gensN.index].\
             loc[network.snapshots[snapshot]].groupby(network.generators.bus).\
             sum().reindex(network.buses.index,fill_value=0.).\
-            groupby(network.buses.corresponding_bus).sum() - \
+            groupby(network.buses.index).sum() - \
             market.generators_t.p[gensM.index].loc[market.snapshots[snapshot]].\
             groupby(market.generators.bus).sum().\
             reindex(market.buses.index,fill_value=0.).\
-            groupby(market.buses.corresponding_bus).sum()).fillna(0)
+            groupby(market.buses.index).sum()).fillna(0)
         
         if max(gen_distribution) != 0 or min(gen_distribution) != 0:
             midpoint = 1 - max(gen_distribution)/(max(gen_distribution) 
