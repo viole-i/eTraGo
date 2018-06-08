@@ -398,6 +398,22 @@ def get_foreign_buses(network, geom):
                       (network.buses.y == item[1][1]), 'country'] = item[0]
     network.buses['country'].fillna('DE', inplace=True)
 
+def set_country_tags(network):
+    transborder_lines_0 = network.lines[network.lines['bus0'].\
+                                            isin(network.foreign_buses)].index
+    transborder_lines_1 = network.lines[network.lines['bus1'].\
+                                        isin(network.foreign_buses)].index
+    
+    #set country tag for lines
+    network.lines.loc[transborder_lines_0, 'country'] = \
+    network.buses.loc[network.lines.loc[transborder_lines_0, 'bus0'].values,
+                      'country'].values
+    
+    network.lines.loc[transborder_lines_1, 'country'] = \
+    network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
+                      'country'].values
+    network.lines['country'].fillna('DE', inplace=True)
+
 def get_transborder_flows(network):
     #positive = imports
     if network.lines.empty == False:
@@ -451,40 +467,47 @@ def get_transborder_flows(network):
         network.foreign_trade = pd.concat([network.links_t.p0[transborder_lines_0], 
                   network.links_t.p1[transborder_lines_1]], axis=1).\
                   groupby(network.links['country'], axis=1).sum()
+                  
+def crossborder_correction(network):
+    cap_per_country = {'AT': 0.59,
+                       'CH': 0.54,
+                       'CZ': 0.51,
+                       'DK': 0.48,
+                       'FR': 0.59,
+                       'LU': 0.59,
+                       'NL': 0.59,
+                       'PL': 0,
+                       'SE': 0.59}
+    for country in cap_per_country:
+        network.lines.loc[network.lines.country == country, 's_nom'] = \
+            network.lines.loc[network.lines.country == country, 's_nom'] \
+            * cap_per_country[country]
         
 def market_simulation(network):
     
     neighbours = network.foreign_buses
-    network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.lines['bus0'].values,
-                                                           'bus1' : network.lines['bus1'].values,
-                                                           'p_nom' : float('Inf'),
-                                                           'p_min_pu' : -1},
-                                                            index=network.lines.index+'Link'),
-                                                            'Link')
-# =============================================================================
-#     neighbours = (
-#     '1025', '2625', '7230', '8035', '9271', '11353', '11601', '12093', '12127', '12128',
-#     '12205', '12402', '12436', '12653', '12733', '13182', '13339', '15182', '25533',
-#     '28405', '28406', '28407', '28408', '28409', '28410', '28413', '28414', '28415', '28416',
-#     '28417', '28418', '28419', '28421', '28422', '28425', '28426', '28427', '28428', '28431'
-#     )
-# =============================================================================
+    network.import_components_from_dataframe(
+            pd.DataFrame({'bus0' : network.lines['bus0'].values,
+                           'bus1' : network.lines['bus1'].values,
+                           'p_nom' : float('Inf'),
+                           'p_min_pu' : -1},
+                            index=network.lines.index+'Link'),
+                            'Link')
     
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
             
-    
-    corr_factor = 0.6
     network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
-                 loc[[a[:-4] for a in mask]].values)*corr_factor
+                 loc[[a[:-4] for a in mask]].values)
     network.lines.drop(network.lines.index, inplace=True)
         
-    network.import_components_from_dataframe(pd.DataFrame({'bus0' : network.transformers['bus0'].values,
-                                                           'bus1' : network.transformers['bus1'].values,
-                                                           'p_nom' : 1000000,
-                                                           'p_min_pu' : -1},
-                                                            index=network.transformers.index+'TrafoLink'),
-                                                            'Link')
+    network.import_components_from_dataframe(
+            pd.DataFrame({'bus0' : network.transformers['bus0'].values,
+                           'bus1' : network.transformers['bus1'].values,
+                           'p_nom' : 1000000,
+                           'p_min_pu' : -1},
+                            index=network.transformers.index+'TrafoLink'),
+                            'Link')
     network.transformers.drop(network.transformers.index, inplace=True)
     return
 
@@ -502,7 +525,7 @@ def ramp_limits(network):
     df = pd.DataFrame(data, index=carrier)
     fuel_costs = network.generators.marginal_cost.groupby(
             network.generators.carrier).mean()[carrier]
-    df['start_up_fuel'] = df['start_up_fuel']*fuel_costs
+    df['start_up_fuel'] = df['start_up_fuel'] * fuel_costs
     df['start_up_cost'] = df['start_up_cost'] + df['start_up_fuel']
     df.drop('start_up_fuel', axis=1, inplace=True)
     for tech in df.index:

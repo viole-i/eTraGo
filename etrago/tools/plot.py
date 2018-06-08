@@ -103,7 +103,7 @@ def add_coordinates(network):
     return network
     
 def plot_line_loading(network, timestep=0, filename=None, boundaries=[],
-                      arrows= False ):
+                      arrows=False):
     """
     Plot line loading as color on lines
 
@@ -121,21 +121,19 @@ def plot_line_loading(network, timestep=0, filename=None, boundaries=[],
 
     # calculate relative line loading as S/S_nom
     # with S = sqrt(P^2 + Q^2)
-    x = time.time()
     cmap = plt.cm.jet
+    fig, ax = plt.subplots()
     if network.lines_t.q0.empty:
-        array_line = [['Line'] * len(network.lines), network.lines.index]
-    
-        loading_lines = pd.Series(abs((network.lines_t.p0.loc[network.snapshots[timestep]]/ \
-                   (network.lines.s_nom)) * 100).data, index = array_line)
-    
-        array_link = [['Link'] * len(network.links), network.links.index]
-    
-        loading_links = pd.Series(abs((network.links_t.p0.loc[network.snapshots[timestep]]/ \
-                   (network.links.p_nom)) * 100).data, index = array_link)
-    
-        loading = loading_lines.append(loading_links)
-        
+        if timestep == 'all':
+            loading_lines = network.lines_t.p0.mean()/network.lines.s_nom * 100
+        else:
+            loading_lines = (network.lines_t.p0.loc[network.snapshots[timestep]]/ \
+                            (network.lines.s_nom)) * 100
+        loading_lines.index = loading_lines.index.astype('int')
+        loading_lines.sort_index(inplace=True)
+        loading_lines.index = loading_lines.index.astype('str')
+        loading_c = loading_lines.fillna(0)
+        loading = loading_c.abs()
     else:
          loading = ((network.lines_t.p0.loc[network.snapshots[timestep]] ** 2 +
                    network.lines_t.q0.loc[network.snapshots[timestep]] ** 2).\
@@ -143,49 +141,43 @@ def plot_line_loading(network, timestep=0, filename=None, boundaries=[],
 
     # do the plotting
 
-    ll = network.plot(line_colors=loading, line_cmap=cmap,
-                      title="Line loading", line_widths=0.55)
+    ll = network.plot(ax=ax, line_colors=loading, line_cmap=cmap,
+                      title="Line loading", line_widths=network.lines.s_nom/2000)
     # add colorbar, note mappable sliced from ll by [1]
-
-    if not boundaries:
-        cb = plt.colorbar(ll[1])
-    elif boundaries:
-        v = np.linspace(boundaries[0], boundaries[1], 101)
-        cb = plt.colorbar(ll[1], boundaries=v,
-                          ticks=v[0:101:10])
-        cb.set_clim(vmin=boundaries[0], vmax=boundaries[1])
-
-    cb.set_label('Line loading in %')
+    if network.lines.empty == False:
+        if not boundaries:
+            cb = plt.colorbar(ll[1])
+        elif boundaries:
+            v = np.linspace(boundaries[0], boundaries[1], 101)
+            cb = plt.colorbar(ll[1], boundaries=v,
+                              ticks=v[0:101:10])
+            cb.set_clim(vmin=boundaries[0], vmax=boundaries[1])
     
+        cb.set_label('Line loading in %')
+
     if arrows:
-        ax = plt.axes()
-        path = ll[1].get_segments()
-        x_coords_lines = np.zeros([len(path)])
-        cmap = cmap
-        colors = cmap(ll[1].get_array()/100)
-        for i in range(0, len(path)):
-            x_coords_lines[i] = network.buses.loc[str(network.lines.iloc[i, 2]),'x']
-            color = colors[i]
-            if (x_coords_lines[i] == path[i][0][0] and loading_c[i] >= 0):
-                arrowprops = dict(arrowstyle="->", color=color)
+        for index, item in loading_c.iteritems():
+            bus0 = network.lines.loc[index, 'bus0']
+            bus1 = network.lines.loc[index, 'bus1']
+            start = np.array([network.buses.loc[bus0, 'x'], network.buses.loc[bus0, 'y']])
+            end = np.array([network.buses.loc[bus1, 'x'], network.buses.loc[bus1, 'y']])
+            if item >= 0:
+                arrowprops = dict(arrowstyle='->', color=cmap(abs(item/100)))
             else:
-                arrowprops = dict(arrowstyle="<-", color=color)
+                arrowprops = dict(arrowstyle='<-', color=cmap(abs(item/100)))
             ax.annotate("",
-                        xy=abs((path[i][0] - path[i][1]) * 0.51 - path[i][0]),
-                        xytext=abs((path[i][0] - path[i][1]) * 0.49 - path[i][0]),
+                        xy=abs((start - end) * 0.51 - start),
+                        xytext=abs((start - end) * 0.49 - start),
                         arrowprops=arrowprops,
                         size=10
                         )
-    
     if filename is None:
         plt.show()
     else:
         plt.savefig(filename)
         plt.close()
     
-    y = time.time()
-    z = (y-x)/60
-    print(z)
+    return loading_c
 
 
 def plot_line_loading_diff(networkA, networkB, timestep=0):
@@ -1007,12 +999,15 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
     fig.set_size_inches(size*n_cols,size*n_rows)
     
     if snapshot == 'all':
-        loading_c = (network.lines_t.p0.mean()/(network.lines.s_nom)) * 100 
-        loading = abs(loading_c)
+        loading_lines = network.lines_t.p0.mean()/network.lines.s_nom * 100
     else:
-        loading_c = (network.lines_t.p0.loc[network.snapshots[snapshot]]/ \
-                     (network.lines.s_nom)) * 100 
-        loading = abs(loading_c)
+        loading_lines = (network.lines_t.p0.loc[network.snapshots[snapshot]]/ \
+                        (network.lines.s_nom)) * 100
+    loading_lines.index = loading_lines.index.astype('int')
+    loading_lines.sort_index(inplace=True)
+    loading_lines.index = loading_lines.index.astype('str')
+    loading_c = loading_lines.fillna(0)
+    loading = loading_c.abs()
     
     network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
     market.buses[['x', 'y']] = market.buses[['x', 'y']].round(4)
@@ -1039,20 +1034,7 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
 #     
 #     market.buses['corresponding_bus'].fillna(fill_value, inplace=True)
 #     network.buses['corresponding_bus'].fillna(fill_value, inplace=True)
-# =============================================================================
-
-# =============================================================================
-#     # corresponding buses for networks with same number of buses  
-#     for index, row in network.buses[2:3].iterrows():
-#         market.buses[(market.buses['x'] == row['x']) & \
-#         (market.buses['y'] == row['y']), 'corresponding_bus'] == index
-#         ix = np.where((market.buses['x'] == row['x']) & \
-#         (market.buses['y'] == row['y']))
-#         network.buses.loc[row.name, 'corresponding_bus'] = index
-#         for i in ix:
-#             market.buses.ix[i, 'corresponding_bus'] = index
-# =============================================================================
-            
+# =============================================================================          
         
     for i,tech in enumerate(techs):
         i_row = i // n_cols
@@ -1074,8 +1056,7 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
         else:
             gensN = network.generators[network.generators.carrier == tech]
             gensM = market.generators[market.generators.carrier == tech]
- # für auskommentierte sachen oben: 4 mal das zweite grouby network.buses.index
-# durch network.buses.corresponding_bus ersetzen       
+     
         if snapshot == 'all':
             gen_distribution = (network.generators_t.p[gensN.index].\
             sum().groupby(network.generators.bus).sum().\
@@ -1132,14 +1113,26 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
             cb_line = plt.colorbar(ll[1], ax=ax)
             cb_bus.set_label('Redispatch in MWh')
             cb_line.set_label('Line loading in %')
+            for index, item in loading_c.iteritems():
+                bus0 = network.lines.loc[index, 'bus0']
+                bus1 = network.lines.loc[index, 'bus1']
+                start = np.array([network.buses.loc[bus0, 'x'], network.buses.loc[bus0, 'y']])
+                end = np.array([network.buses.loc[bus1, 'x'], network.buses.loc[bus1, 'y']])
+                if item >= 0:
+                    arrowprops = dict(arrowstyle='->', color=line_cmap(abs(item/100)))
+                else:
+                    arrowprops = dict(arrowstyle='<-', color=line_cmap(abs(item/100)))
+                ax.annotate("",
+                            xy=abs((start - end) * 0.51 - start),
+                            xytext=abs((start - end) * 0.49 - start),
+                            arrowprops=arrowprops,
+                            size=10
+                            )
         else:
             ll = network.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
               bus_colors=gen_distribution, line_widths=0.1, 
               bus_cmap=shifted_cmap)
             cb_bus = plt.colorbar(ll[0], ax=ax)
-        
-        #print(tech, gen_distribution)
-        #print(fill_value)
         
         ax.set_title(tech)       
     if filename is None:

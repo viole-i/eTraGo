@@ -43,7 +43,8 @@ if not 'READTHEDOCS' in os.environ:
                                     results_to_csv, parallelisation, pf_post_lopf, 
                                     loading_minimization, calc_line_losses, group_parallel_lines,
                                     german_geom, get_foreign_buses, ramp_limits,
-                                    market_simulation)
+                                    market_simulation, set_country_tags,
+                                    crossborder_correction)
     from etrago.tools.extendable import extendable
     from etrago.cluster.networkclustering import busmap_from_psql, cluster_on_extra_high_voltage, kmean_clustering
     #from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
@@ -67,16 +68,17 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/market_4500_corr', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/network_4500_corr_extendable', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
-        'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
+        'extendable':['network'], # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': False,#'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
-        'market_simulation':'ntc',
+        'market_simulation':False,
         'ramp_limits':False,
+        'crossborder_correction': True,
         # Clustering:
         'network_clustering_kmeans':100, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).
         'load_cluster': 'cluster_coord_k_100_result', # state if you want to load cluster coordinates from a previous run: False or /path/tofile (filename similar to ./cluster_coord_k_n_result)
@@ -292,14 +294,14 @@ def etrago(args):
         try:
             new_snom_lines = pd.Series.from_csv('lines_opt.csv')
             index = [str(x) for x in new_snom_lines.index]
-            network.lines['s_nom'].loc[index] = new_snom_lines.values
+            network.lines.loc[index, 's_nom'] = new_snom_lines.values
         except:
             print('No corrected line values found.')
             
         try:
             new_snom_transformers = pd.Series.from_csv('transformers_opt.csv')
             index = [str(x) for x in new_snom_transformers.index]
-            network.transformers['s_nom'].loc[index] = new_snom_transformers.values
+            network.transformers.loc[index, 's_nom'] = new_snom_transformers.values
         except:
             print('No corrected transformer values found.')
         
@@ -340,9 +342,6 @@ def etrago(args):
                                    line_length_factor= 1.25, remove_stubs=True, 
                                    use_reduced_coordinates=False, bus_weight_tocsv=None, 
                                    bus_weight_fromcsv=None)
-    
-    geom = german_geom(args['db'])
-    get_foreign_buses(network, geom)
 
     # Branch loading minimization
     if args['minimize_loading']:
@@ -364,12 +363,20 @@ def etrago(args):
     if args ['extendable'] != None:
         network = extendable(network, args['extendable'], args ['scn_extension'])
         network = convert_capital_costs(network, args['start_snapshot'], args['end_snapshot'])
+        
     if args['branch_capacity_factor']:
         network.lines.s_nom = network.lines.s_nom*args['branch_capacity_factor']
         network.transformers.s_nom = network.transformers.s_nom*args['branch_capacity_factor']
-      
+    
+    geom = german_geom(args['db'])
+    get_foreign_buses(network, geom)
+    
+    if args['crossborder_correction']:
+        set_country_tags(network)
+        crossborder_correction(network)
+    
     if args['market_simulation']:
-        market_simulation(network, args['market_simulation'])
+        market_simulation(network)
     
     if args['ramp_limits']:
         ramp_limits(network)
