@@ -983,6 +983,7 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
 
     n_graphs = len(techs)
     n_cols = n_cols
+    line_cmap = plt.cm.jet
 
     if n_graphs % n_cols == 0:
         n_rows = n_graphs // n_cols
@@ -1108,7 +1109,7 @@ def plot_redispatch(network, market, techs=None, snapshot='all',
             ll = network.plot(ax=ax,bus_sizes=gen_size*abs(gen_distribution), 
               bus_colors=gen_distribution, line_widths=0.55, 
               bus_cmap=shifted_cmap, line_colors=loading, 
-              line_cmap=plt.cm.jet)
+              line_cmap=line_cmap)
             cb_bus = plt.colorbar(ll[0], ax=ax)
             cb_line = plt.colorbar(ll[1], ax=ax)
             cb_bus.set_label('Redispatch in MWh')
