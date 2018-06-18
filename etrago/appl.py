@@ -58,8 +58,8 @@ args = {# Setup and Configuration:
         'gridversion': 'v0.3.2', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
-        'start_snapshot': 4500,
-        'end_snapshot' : 4600,
+        'start_snapshot': 1,
+        'end_snapshot' : 2,
         'solver': 'gurobi', # glpk, cplex or gurobi
         'scn_name': 'Status Quo', # # choose a scenario: Status Quo, NEP 2035, eGo100
             # Scenario variations:
@@ -68,12 +68,12 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/network_4500_corr_extendable', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': False,#'/home/student/Marlon/network_100_corr', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
-        'extendable':['network'], # None or array of components you want to optimize (e.g. ['network', 'storages'])
+        'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': False,#'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': False, #'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
         'market_simulation':False,
