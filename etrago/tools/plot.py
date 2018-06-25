@@ -458,7 +458,8 @@ def plot_residual_load(network):
     """
 
     renewables = network.generators[
-                    network.generators.former_dispatch == 'variable']
+                    network.generators.carrier.isin(['run_of_river', 'solar',
+                                                    'wind_onshore', 'wind_offshore'])]
     renewables_t = network.generators.p_nom[renewables.index] * \
                         network.generators_t.p_max_pu[renewables.index]
     load = network.loads_t.p_set.sum(axis=1)
@@ -506,7 +507,7 @@ def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
                        groupby(network.generators.carrier, axis=1).sum()
         load = network.loads_t.p.sum(axis=1)
         if hasattr(network, 'foreign_trade'):
-            trade_sum = network.foreign_trade
+            trade_sum = network.foreign_trade.sum(axis=1)
             p_by_carrier['imports'] = trade_sum[trade_sum > 0]
             p_by_carrier['imports'] = p_by_carrier['imports'].fillna(0)
     # sum for a single bus
@@ -531,7 +532,7 @@ def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
               'solar':'yellow',
               'uranium':'lime',
               'waste':'sienna',
-              'wind':'skyblue',
+              'wind_onshore':'skyblue',
               'wind_offshore':'dodgerblue',
               'slack':'pink',
               'load shedding': 'red',

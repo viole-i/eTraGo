@@ -55,12 +55,12 @@ x = time.time()
 
 args = {# Setup and Configuration:
         'db': 'marlon', # db session
-        'gridversion': 'v0.3.2', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
+        'gridversion': 'v0.4.1', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
         'start_snapshot': 1,
-        'end_snapshot' : 2,
-        'solver': 'gurobi', # glpk, cplex or gurobi
+        'end_snapshot' : 8760,
+        'solver': 'glpk', # glpk, cplex or gurobi
         'scn_name': 'Status Quo', # # choose a scenario: Status Quo, NEP 2035, eGo100
             # Scenario variations:
             'scn_extension': None, # None or name of additional scenario (in extension_tables) e.g. 'nep2035_b2'
@@ -68,14 +68,14 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': False,#'/home/student/Marlon/network_100_corr', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/network_041_corr', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
         'generator_noise':True, # state if you want to apply a small generator noise 
-        'reproduce_noise': False, #'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
+        'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
-        'use_cleaned_snom':True, #state if you want to use cleaned s_noms to avoid load shedding
+        'use_cleaned_snom':False, #state if you want to use cleaned s_noms to avoid load shedding
         'market_simulation':False,
         'ramp_limits':False,
         'crossborder_correction': True,
@@ -369,7 +369,7 @@ def etrago(args):
         network.transformers.s_nom = network.transformers.s_nom*args['branch_capacity_factor']
     
     geom = german_geom(args['db'])
-    get_foreign_buses(network, geom)
+    get_foreign_buses(network, geom, args['gridversion'])
     
     if args['crossborder_correction']:
         set_country_tags(network)

@@ -371,23 +371,35 @@ def parallelisation(network, start_snapshot, end_snapshot, group_size, solver_na
     return
 
 
-def get_foreign_buses(network, geom):
+def get_foreign_buses(network, geom, version):
     geom = geom.buffer(0.075)
     coords = network.buses[['x', 'y']]
     coords = [tuple(x) for x in coords.values]
     buses = MultiPoint(coords)
     
     network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
-    bus_by_country = {'FR': [1.7186, 46.7737],
-                      'CH': [8.1902, 46.7662],
-                      'AT': [14.1584, 47.5871],
-                      'CZ': [15.4750, 49.8710],
-                      'PL': [19.1343, 51.8784],
-                      'SE': [12.9013, 57.6655],
-                      'DK': [9.3481, 56.2345],
-                      'NL': [5.3302, 52.1690],
-                      'LU': [6.1957, 49.8167]
-                      }
+    if version == 'v0.4.1':
+        bus_by_country = {'FR': [1.7186, 46.7737],
+                          'CH': [8.1902, 46.7662],
+                          'AT': [14.1584, 47.5871],
+                          'CZ': [15.4750, 49.8710],
+                          'PL': [19.1343, 51.8784],
+                          'SE': [15.0002, 61.4334],
+                          'DK': [9.3481, 56.2345],
+                          'NL': [5.3302, 52.1690],
+                          'LU': [6.1631, 49.8663]
+                          }
+    else:
+        bus_by_country = {'FR': [1.7186, 46.7737],
+                          'CH': [8.1902, 46.7662],
+                          'AT': [14.1584, 47.5871],
+                          'CZ': [15.4750, 49.8710],
+                          'PL': [19.1343, 51.8784],
+                          'SE': [12.9013, 57.6655],
+                          'DK': [9.3481, 56.2345],
+                          'NL': [5.3302, 52.1690],
+                          'LU': [6.1957, 49.8167]
+                          }
     index_foreign_buses = []
     for i, pt in enumerate(buses):
         if pt.within(geom) == False:
@@ -406,11 +418,11 @@ def set_country_tags(network):
     
     #set country tag for lines
     network.lines.loc[transborder_lines_0, 'country'] = \
-    network.buses.loc[network.lines.loc[transborder_lines_0, 'bus0'].values,
+        network.buses.loc[network.lines.loc[transborder_lines_0, 'bus0'].values,
                       'country'].values
     
     network.lines.loc[transborder_lines_1, 'country'] = \
-    network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
+        network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
                       'country'].values
     network.lines['country'].fillna('DE', inplace=True)
 
