@@ -480,23 +480,41 @@ def get_transborder_flows(network):
                   network.links_t.p1[transborder_lines_1]], axis=1).\
                   groupby(network.links['country'], axis=1).sum()
                   
-def crossborder_correction(network):
-    cap_per_country = {'AT': 0.59,
-                       'CH': 0.54,
-                       'CZ': 0.51,
-                       'DK': 0.48,
-                       'FR': 0.59,
-                       'LU': 0.59,
-                       'NL': 0.59,
-                       'PL': 0,
-                       'SE': 0.59}
-    for country in cap_per_country:
-        network.lines.loc[network.lines.country == country, 's_nom'] = \
-            network.lines.loc[network.lines.country == country, 's_nom'] \
-            * cap_per_country[country]
+def crossborder_correction(network, method):
+    if method == 'percentage':
+        cap_per_country = {'AT': 0.59,
+                           'CH': 0.54,
+                           'CZ': 0.51,
+                           'DK': 0.48,
+                           'FR': 0.59,
+                           'LU': 0.59,
+                           'NL': 0.59,
+                           'PL': 0,
+                           'SE': 0.59}
+        for country in cap_per_country:
+            network.lines.loc[network.lines.country == country, 's_nom'] = \
+                network.lines.loc[network.lines.country == country, 's_nom'] \
+                * cap_per_country[country]
+                
+    elif method == 'flat':
+        cap_per_country = {'AT': 4900,
+                           'CH': 2687,
+                           'CZ': 832,
+                           'DK': 1277,
+                           'FR': 2078,
+                           'LU': 4160,
+                           'NL': 2076,
+                           'PL': 832,
+                           'SE': 217}
+        weighting = network.lines.loc[network.lines.country!='DE', 's_nom'].\
+                    groupby(network.lines.country).transform(lambda x: x/x.sum())
+        for country in cap_per_country:
+            index = network.lines[network.lines.country == country].index
+            network.lines.loc[index, 's_nom'] = \
+                                    weighting[index] * cap_per_country[country]
+            
         
 def market_simulation(network):
-    
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(
             pd.DataFrame({'bus0' : network.lines['bus0'].values,
@@ -508,6 +526,7 @@ def market_simulation(network):
     
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
+    mask = [s for s in mask if "Link" in s]
             
     network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
                  loc[[a[:-4] for a in mask]].values)

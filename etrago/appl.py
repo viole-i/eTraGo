@@ -55,12 +55,12 @@ x = time.time()
 
 args = {# Setup and Configuration:
         'db': 'marlon', # db session
-        'gridversion': 'v0.4.1', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
+        'gridversion': 'v0.4.2', # None for model_draft or Version number (e.g. v0.2.11) for grid schema
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
         'start_snapshot': 1,
         'end_snapshot' : 8760,
-        'solver': 'glpk', # glpk, cplex or gurobi
+        'solver': 'gurobi', # glpk, cplex or gurobi
         'scn_name': 'Status Quo', # # choose a scenario: Status Quo, NEP 2035, eGo100
             # Scenario variations:
             'scn_extension': None, # None or name of additional scenario (in extension_tables) e.g. 'nep2035_b2'
@@ -68,7 +68,7 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/network_041_corr', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/market_042', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
@@ -76,9 +76,9 @@ args = {# Setup and Configuration:
         'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':False, #state if you want to use cleaned s_noms to avoid load shedding
-        'market_simulation':False,
+        'market_simulation':True,
         'ramp_limits':False,
-        'crossborder_correction': True,
+        'crossborder_correction': False, #state if you want to correct interconnector capacities. 'flat' or 'percentage'
         # Clustering:
         'network_clustering_kmeans':100, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).
         'load_cluster': 'cluster_coord_k_100_result', # state if you want to load cluster coordinates from a previous run: False or /path/tofile (filename similar to ./cluster_coord_k_n_result)
@@ -373,7 +373,7 @@ def etrago(args):
     
     if args['crossborder_correction']:
         set_country_tags(network)
-        crossborder_correction(network)
+        crossborder_correction(network, args['crossborder_correction'])
     
     if args['market_simulation']:
         market_simulation(network)
@@ -400,8 +400,11 @@ def etrago(args):
     # start linear optimal powerflow calculations
     elif args['method'] == 'lopf':
         x = time.time()
-
-        network.lopf(network.snapshots, solver_name=args['solver'], extra_functionality=extra_functionality)
+        try:
+            network.lopf(network.snapshots, solver_name=args['solver'], extra_functionality=extra_functionality)
+        except:
+            network.model.write(args['lpfile'], io_options={'symbolic_solver_labels':
+                                                     True})
         y = time.time()
         z = (y - x) / 60 
         print("Time for LOPF [min]:",round(z,2))# z is time for lopf in minutes
