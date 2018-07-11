@@ -425,6 +425,10 @@ def set_country_tags(network):
         network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
                       'country'].values
     network.lines['country'].fillna('DE', inplace=True)
+    doubles = list(set(network.lines_t.p0[transborder_lines_0].columns).\
+                       intersection(network.lines_t.p1[transborder_lines_1].columns))
+    network.lines.loc[doubles, 'country'] = 'NOTDE'
+    network.links['country'] = 'SE'
 
 def get_transborder_flows(network):
     #positive = imports
@@ -446,6 +450,7 @@ def get_transborder_flows(network):
         #identify lines between two foreign buses (no impact on trade) and delete
         doubles = list(set(network.lines_t.p0[transborder_lines_0].columns).\
                        intersection(network.lines_t.p1[transborder_lines_1].columns))
+        network.lines.loc[doubles, 'country'] = 'NOTDE'
         transborder_lines_0 = transborder_lines_0.drop(doubles)
         transborder_lines_1 = transborder_lines_1.drop(doubles)
         
@@ -454,7 +459,7 @@ def get_transborder_flows(network):
                   network.lines_t.p1[transborder_lines_1]], axis=1).\
                   groupby(network.lines['country'], axis=1).sum()                                    
 
-    else:
+    if network.links.empty == False:
         transborder_lines_0 = network.links[network.links['bus0'].\
                                             isin(network.foreign_buses)].index
         transborder_lines_1 = network.links[network.links['bus1'].\
@@ -472,6 +477,7 @@ def get_transborder_flows(network):
         #identify lines between two foreign buses (no impact on trade) and delete
         doubles = list(set(network.links_t.p0[transborder_lines_0].columns).\
                        intersection(network.links_t.p1[transborder_lines_1].columns))
+        network.links.loc[doubles, 'country'] = 'NOTDE'
         transborder_lines_0 = transborder_lines_0.drop(doubles)
         transborder_lines_1 = transborder_lines_1.drop(doubles)
         
@@ -512,6 +518,8 @@ def crossborder_correction(network, method):
             index = network.lines[network.lines.country == country].index
             network.lines.loc[index, 's_nom'] = \
                                     weighting[index] * cap_per_country[country]
+            if country == 'SE':
+                network.links.p_nom = cap_per_country[country]
             
         
 def market_simulation(network):
