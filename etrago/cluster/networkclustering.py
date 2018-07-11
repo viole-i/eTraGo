@@ -448,7 +448,7 @@ def kmean_clustering(network, n_clusters=10, load_cluster=False,
     if remove_stubs == True:
         network.determine_network_topology()
         busmap = busmap_by_stubs(network)
-        network.generators['weight'] = 1
+        network.generators['weight'] = network.generators['p_nom']
         aggregate_one_ports = components.one_port_components.copy()
         aggregate_one_ports.discard('Generator')
         #reset coordinates to the new reduced guys, rather than taking an average (copied from pypsa.networkclustering)
@@ -490,7 +490,7 @@ def kmean_clustering(network, n_clusters=10, load_cluster=False,
     busmap = busmap_by_kmeans(network, bus_weightings=pd.Series(weight), n_clusters=n_clusters, load_cluster=load_cluster, n_jobs=-1)
 
     # ToDo change function in order to use bus_strategies or similar
-    network.generators['weight'] = 1
+    network.generators['weight'] = network.generators['p_nom']
     aggregate_one_ports = components.one_port_components.copy()
     aggregate_one_ports.discard('Generator')
     clustering = get_clustering_from_busmap(network, busmap, aggregate_generators_weighted=True, aggregate_one_ports=aggregate_one_ports)

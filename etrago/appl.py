@@ -68,7 +68,7 @@ args = {# Setup and Configuration:
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
         'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/market_042', # state if and where you want to save results as csv: False or /path/tofolder
+        'results': '/home/student/Marlon/network_042_ramp', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
@@ -76,8 +76,8 @@ args = {# Setup and Configuration:
         'reproduce_noise': 'noise_values.csv', # state if you want to use a predefined set of random noise for the given scenario. if so, provide path, e.g. 'noise_values.csv'
         'minimize_loading':False,
         'use_cleaned_snom':False, #state if you want to use cleaned s_noms to avoid load shedding
-        'market_simulation':True,
-        'ramp_limits':False,
+        'market_simulation':False,
+        'ramp_limits':True,
         'crossborder_correction': False, #state if you want to correct interconnector capacities. 'flat' or 'percentage'
         # Clustering:
         'network_clustering_kmeans':100, # state if you want to perform a k-means clustering on the given network. State False or the value k (e.g. 20).

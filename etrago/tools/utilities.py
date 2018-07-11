@@ -425,9 +425,11 @@ def set_country_tags(network):
         network.buses.loc[network.lines.loc[transborder_lines_1, 'bus1'].values,
                       'country'].values
     network.lines['country'].fillna('DE', inplace=True)
-    doubles = list(set(network.lines_t.p0[transborder_lines_0].columns).\
-                       intersection(network.lines_t.p1[transborder_lines_1].columns))
-    network.lines.loc[doubles, 'country'] = 'NOTDE'
+    doubles = list(set(transborder_lines_0.intersection(transborder_lines_1)))
+    for line in doubles:
+        c_bus0 = network.buses.loc[network.lines.loc[line, 'bus0'], 'country']
+        c_bus1 = network.buses.loc[network.lines.loc[line, 'bus1'], 'country']
+        network.lines.loc[line, 'country'] = '{}{}'.format(c_bus0, c_bus1)
     network.links['country'] = 'SE'
 
 def get_transborder_flows(network):
@@ -448,9 +450,12 @@ def get_transborder_flows(network):
                           'country'].values
         network.lines['country'].fillna('DE', inplace=True)
         #identify lines between two foreign buses (no impact on trade) and delete
-        doubles = list(set(network.lines_t.p0[transborder_lines_0].columns).\
-                       intersection(network.lines_t.p1[transborder_lines_1].columns))
-        network.lines.loc[doubles, 'country'] = 'NOTDE'
+        doubles = list(set(transborder_lines_0.intersection(transborder_lines_1)))
+        for line in doubles:
+            c_bus0 = network.buses.loc[network.lines.loc[line, 'bus0'], 'country']
+            c_bus1 = network.buses.loc[network.lines.loc[line, 'bus1'], 'country']
+            network.lines.loc[line, 'country'] = '{}{}'.format(c_bus0, c_bus1)
+            
         transborder_lines_0 = transborder_lines_0.drop(doubles)
         transborder_lines_1 = transborder_lines_1.drop(doubles)
         
@@ -475,9 +480,12 @@ def get_transborder_flows(network):
         network.links['country'].fillna('DE', inplace=True)
         
         #identify lines between two foreign buses (no impact on trade) and delete
-        doubles = list(set(network.links_t.p0[transborder_lines_0].columns).\
-                       intersection(network.links_t.p1[transborder_lines_1].columns))
-        network.links.loc[doubles, 'country'] = 'NOTDE'
+        doubles = list(set(transborder_lines_0.intersection(transborder_lines_1)))
+        for line in doubles:
+            c_bus0 = network.buses.loc[network.links.loc[line, 'bus0'], 'country']
+            c_bus1 = network.buses.loc[network.links.loc[line, 'bus1'], 'country']
+            network.links.loc[line, 'country'] = '{}{}'.format(c_bus0, c_bus1)
+            
         transborder_lines_0 = transborder_lines_0.drop(doubles)
         transborder_lines_1 = transborder_lines_1.drop(doubles)
         
@@ -504,14 +512,20 @@ def crossborder_correction(network, method):
                 
     elif method == 'flat':
         cap_per_country = {'AT': 4900,
-                           'CH': 2687,
-                           'CZ': 832,
-                           'DK': 1277,
-                           'FR': 2078,
-                           'LU': 4160,
-                           'NL': 2076,
-                           'PL': 832,
-                           'SE': 217}
+                           'CH': 2695,
+                           'CZ': 1301,
+                           'DK': 913,
+                           'FR': 3593,
+                           'LU': 2912,
+                           'NL': 2811,
+                           'PL': 280,
+                           'SE': 217,
+                           'CZAT': 574,
+                           'CZPL': 312,
+                           'ATCH': 979,
+                           'CHFR': 2087,
+                           'FRLU': 364,
+                           'SEDK': 1928}
         weighting = network.lines.loc[network.lines.country!='DE', 's_nom'].\
                     groupby(network.lines.country).transform(lambda x: x/x.sum())
         for country in cap_per_country:
