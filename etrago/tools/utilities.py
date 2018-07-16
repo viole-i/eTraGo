@@ -386,7 +386,7 @@ def get_foreign_buses(network, geom, version):
                           'SE': [15.0002, 61.4334],
                           'DK': [9.3481, 56.2345],
                           'NL': [5.3302, 52.1690],
-                          'LU': [6.1631, 49.8663]
+                          'LU': [6.1807, 49.7708]
                           }
     else:
         bus_by_country = {'FR': [1.7186, 46.7737],
@@ -535,16 +535,25 @@ def crossborder_correction(network, method):
                 network.links.p_nom = cap_per_country[country]
             
         
-def market_simulation(network):
+def market_simulation(network, path_network):
+    lines = path_network.replace('market', 'network') + '/lines-p0.csv'
+    line_usage = pd.read_csv(lines, index_col=0).abs()
+    links = path_network.replace('market', 'network') + '/links-p0.csv'
+    link_usage = pd.read_csv(links, index_col=0).abs()
+    line_usage.columns = line_usage.columns + 'Link'
+    line_usage = pd.concat([link_usage, line_usage], axis=1)
+    network.links.p_max_pu = line_usage
+    network.links.p_min_pu = line_usage * -1
+    
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(
             pd.DataFrame({'bus0' : network.lines['bus0'].values,
                            'bus1' : network.lines['bus1'].values,
-                           'p_nom' : float('Inf'),
-                           'p_min_pu' : -1},
+                           'p_nom' : float('Inf')},
                             index=network.lines.index+'Link'),
                             'Link')
-    
+    network.links_t.p_max_pu = line_usage
+    network.links_t.p_min_pu = line_usage*-1
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
     mask = [s for s in mask if "Link" in s]
