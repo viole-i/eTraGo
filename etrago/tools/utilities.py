@@ -27,7 +27,6 @@ import os
 import time
 from egoio.tools import db
 from egoio.db_tables.boundaries import BkgVg2501Sta
-from egoio.db_tables.model_draft import EgoGridHvElectricalNeighboursBus as NeighboursBus
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import and_
 from geoalchemy2.shape import to_shape
@@ -378,7 +377,7 @@ def get_foreign_buses(network, geom, version):
     buses = MultiPoint(coords)
     
     network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
-    if version == 'v0.4.1':
+    if version == 'v0.4.2':
         bus_by_country = {'FR': [1.7186, 46.7737],
                           'CH': [8.1902, 46.7662],
                           'AT': [14.1584, 47.5871],
