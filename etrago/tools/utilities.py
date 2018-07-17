@@ -536,14 +536,19 @@ def crossborder_correction(network, method):
             
         
 def market_simulation(network, path_network):
-    lines = path_network.replace('market', 'network') + '/lines-p0.csv'
-    line_usage = pd.read_csv(lines, index_col=0).abs()
-    links = path_network.replace('market', 'network') + '/links-p0.csv'
-    link_usage = pd.read_csv(links, index_col=0).abs()
-    line_usage.columns = line_usage.columns + 'Link'
-    line_usage = pd.concat([link_usage, line_usage], axis=1)
-    network.links.p_max_pu = line_usage
-    network.links.p_min_pu = line_usage * -1
+    linepath = path_network.replace('market', 'network') + '/lines-p0.csv'
+    lineflows = pd.read_csv(linepath, index_col=0).abs()
+    lineflows = lineflows/network.lines.s_nom
+    
+    linkpath = path_network.replace('market', 'network') + '/links-p0.csv'
+    linkflows = pd.read_csv(linkpath, index_col=0).abs()
+    linkflows = linkflows/network.links.p_nom
+    linkflows['2'] = 0
+    
+    lineflows.columns = lineflows.columns + 'Link'
+    lineflows = pd.concat([linkflows, lineflows], axis=1)
+    network.links_t.p_max_pu = lineflows
+    network.links_t.p_min_pu = lineflows * -1
     
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(
@@ -552,8 +557,6 @@ def market_simulation(network, path_network):
                            'p_nom' : float('Inf')},
                             index=network.lines.index+'Link'),
                             'Link')
-    network.links_t.p_max_pu = line_usage
-    network.links_t.p_min_pu = line_usage*-1
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
     mask = [s for s in mask if "Link" in s]

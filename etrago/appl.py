@@ -59,7 +59,7 @@ args = {# Setup and Configuration:
         'method': 'lopf', # lopf or pf
         'pf_post_lopf': False, # state whether you want to perform a pf after a lopf simulation
         'start_snapshot': 1,
-        'end_snapshot' : 8760,
+        'end_snapshot' : 2,
         'solver': 'gurobi', # glpk, cplex or gurobi
         'scn_name': 'Status Quo', # # choose a scenario: Status Quo, NEP 2035, eGo100
             # Scenario variations:
@@ -67,8 +67,8 @@ args = {# Setup and Configuration:
             'scn_decommissioning': None, # None or name of decommissioning-scenario (in extension_tables) e.g. 'nep2035_b2'
             'add_Belgium_Norway': False,  # state if you want to add Belgium and Norway as electrical neighbours, timeseries from scenario NEP 2035!
         # Export options:
-        'lpfile': False, # state if and where you want to save pyomo's lp file: False or /path/tofolder
-        'results': '/home/student/Marlon/SQ/market', # state if and where you want to save results as csv: False or /path/tofolder
+        'lpfile': '/home/student/Marlon/SQ/market_2/market.lp', # state if and where you want to save pyomo's lp file: False or /path/tofolder
+        'results': '/home/student/Marlon/SQ/market_2', # state if and where you want to save results as csv: False or /path/tofolder
         'export': False, # state if you want to export the results back to the database
         # Settings:
         'extendable':None, # None or array of components you want to optimize (e.g. ['network', 'storages'])
