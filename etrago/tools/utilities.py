@@ -509,22 +509,27 @@ def crossborder_correction(network, method):
                 network.lines.loc[network.lines.country == country, 's_nom'] \
                 * cap_per_country[country]
                 
-    elif method == 'flat':
-        cap_per_country = {'AT': 4900,
-                           'CH': 2695,
-                           'CZ': 1301,
-                           'DK': 913,
-                           'FR': 3593,
-                           'LU': 2912,
-                           'NL': 2811,
-                           'PL': 280,
-                           'SE': 217,
-                           'CZAT': 574,
-                           'CZPL': 312,
-                           'ATCH': 979,
-                           'CHFR': 2087,
-                           'FRLU': 364,
-                           'SEDK': 1928}
+    else:
+        if method == 'oec':
+            cap_per_country = {'AT': 4900,
+                               'CH': 2695,
+                               'CZ': 1301,
+                               'DK': 913,
+                               'FR': 3593,
+                               'LU': 2912,
+                               'NL': 2811,
+                               'PL': 280,
+                               'SE': 217,
+                               'CZAT': 574,
+                               'CZPL': 312,
+                               'ATCH': 979,
+                               'CHFR': 2087,
+                               'FRLU': 364,
+                               'SEDK': 1928}
+        elif method == 'thermal':
+            cap_per_country = {'CH': 12000,
+                                'DK': 4000,
+                                'SEDK': 3500}
         weighting = network.lines.loc[network.lines.country!='DE', 's_nom'].\
                     groupby(network.lines.country).transform(lambda x: x/x.sum())
         for country in cap_per_country:
@@ -535,21 +540,7 @@ def crossborder_correction(network, method):
                 network.links.p_nom = cap_per_country[country]
             
         
-def market_simulation(network, path_network):
-    linepath = path_network.replace('market', 'network') + '/lines-p0.csv'
-    lineflows = pd.read_csv(linepath, index_col=0).abs()
-    lineflows = lineflows/network.lines.s_nom
-    
-    linkpath = path_network.replace('market', 'network') + '/links-p0.csv'
-    linkflows = pd.read_csv(linkpath, index_col=0).abs()
-    linkflows = linkflows/network.links.p_nom
-    linkflows['2'] = 0
-    
-    lineflows.columns = lineflows.columns + 'Link'
-    lineflows = pd.concat([linkflows, lineflows], axis=1)
-    network.links_t.p_max_pu = lineflows
-    network.links_t.p_min_pu = lineflows * -1
-    
+def market_simulation(network, method, path_network):
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(
             pd.DataFrame({'bus0' : network.lines['bus0'].values,
@@ -559,8 +550,37 @@ def market_simulation(network, path_network):
                             'Link')
     mask = network.links['p_nom'].loc[(network.links['bus0'].isin(neighbours) == True) |
             (network.links['bus1'].isin(neighbours) == True)].index
-    mask = [s for s in mask if "Link" in s]
             
+    if method == 'fbmc':
+        linepath = path_network.replace('market', 'network').\
+                    replace('_fbmc', '') + '/lines-p0.csv'
+        lineflows = pd.read_csv(linepath, index_col=0).abs()
+        lineflows = lineflows/network.lines.s_nom
+        
+        linkpath = path_network.replace('market', 'network').\
+                    replace('_fbmc', '') + '/links-p0.csv'
+        linkflows = pd.read_csv(linkpath, index_col=0).abs()
+        linkflows = linkflows/network.links.p_nom[linkflows.columns]
+        linkflows['2'] = 0
+        
+        lineflows.columns = lineflows.columns + 'Link'
+        lineflows = pd.concat([linkflows, lineflows], axis=1)
+        
+        german_lines = [s for s in network.links.index if s not in mask]
+        network.links_t.p_max_pu = lineflows
+        network.links_t.p_min_pu = lineflows * -1
+        network.links_t.p_max_pu[german_lines] = 1
+        network.links_t.p_min_pu[german_lines] = -1
+        network.links_t.p_max_pu = network.links_t.p_max_pu.set_index(\
+                                    pd.to_datetime(network.links_t.p_max_pu.index))
+        network.links_t.p_min_pu = network.links_t.p_min_pu.set_index(\
+                                    pd.to_datetime(network.links_t.p_min_pu.index))
+    else:
+        network.links['p_max_pu'] = 1
+        network.links['p_min_pu'] = -1
+    
+    mask = [s for s in mask if "Link" in s]
+
     network.links['p_nom'].loc[mask] = (network.lines['s_nom'].\
                  loc[[a[:-4] for a in mask]].values)
     network.lines.drop(network.lines.index, inplace=True)
