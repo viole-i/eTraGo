@@ -521,15 +521,22 @@ def crossborder_correction(network, method):
                                'PL': 280,
                                'SE': 217,
                                'CZAT': 574,
+                               'ATCZ': 574,
                                'CZPL': 312,
+                               'PLCZ': 312,
                                'ATCH': 979,
+                               'CHAT': 979,
                                'CHFR': 2087,
+                               'FRCH': 2087,
                                'FRLU': 364,
-                               'SEDK': 1928}
+                               'LUFR': 364,
+                               'SEDK': 1928,
+                               'DKSE': 1928}
         elif method == 'thermal':
             cap_per_country = {'CH': 12000,
                                 'DK': 4000,
-                                'SEDK': 3500}
+                                'SEDK': 3500,
+                                'DKSE': 3500}
         weighting = network.lines.loc[network.lines.country!='DE', 's_nom'].\
                     groupby(network.lines.country).transform(lambda x: x/x.sum())
         for country in cap_per_country:
