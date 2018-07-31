@@ -370,34 +370,46 @@ def parallelisation(network, start_snapshot, end_snapshot, group_size, solver_na
     return
 
 
-def get_foreign_buses(network, geom, version):
+def get_foreign_buses(network, geom, version, scenario):
     geom = geom.buffer(0.075)
     coords = network.buses[['x', 'y']]
     coords = [tuple(x) for x in coords.values]
     buses = MultiPoint(coords)
     
     network.buses[['x', 'y']] = network.buses[['x', 'y']].round(4)
-    if version == 'v0.4.2':
+    if scenario == 'Status Quo':
+        if version == 'v0.4.2':
+            bus_by_country = {'FR': [1.7186, 46.7737],
+                              'CH': [8.1902, 46.7662],
+                              'AT': [14.1584, 47.5871],
+                              'CZ': [15.4750, 49.8710],
+                              'PL': [19.1343, 51.8784],
+                              'SE': [15.0002, 61.4334],
+                              'DK': [9.3481, 56.2345],
+                              'NL': [5.3302, 52.1690],
+                              'LU': [6.1807, 49.7708]
+                              }
+        else:
+            bus_by_country = {'FR': [1.7186, 46.7737],
+                              'CH': [8.1902, 46.7662],
+                              'AT': [14.1584, 47.5871],
+                              'CZ': [15.4750, 49.8710],
+                              'PL': [19.1343, 51.8784],
+                              'SE': [12.9013, 57.6655],
+                              'DK': [9.3481, 56.2345],
+                              'NL': [5.3302, 52.1690],
+                              'LU': [6.1957, 49.8167]
+                              }
+    elif scenario == 'NEP 2035':
         bus_by_country = {'FR': [1.7186, 46.7737],
-                          'CH': [8.1902, 46.7662],
+                          'CH': [8.1988, 46.8747],
                           'AT': [14.1584, 47.5871],
                           'CZ': [15.4750, 49.8710],
                           'PL': [19.1343, 51.8784],
                           'SE': [15.0002, 61.4334],
                           'DK': [9.3481, 56.2345],
                           'NL': [5.3302, 52.1690],
-                          'LU': [6.1807, 49.7708]
-                          }
-    else:
-        bus_by_country = {'FR': [1.7186, 46.7737],
-                          'CH': [8.1902, 46.7662],
-                          'AT': [14.1584, 47.5871],
-                          'CZ': [15.4750, 49.8710],
-                          'PL': [19.1343, 51.8784],
-                          'SE': [12.9013, 57.6655],
-                          'DK': [9.3481, 56.2345],
-                          'NL': [5.3302, 52.1690],
-                          'LU': [6.1957, 49.8167]
+                          'LU': [6.0335, 49.5522]
                           }
     index_foreign_buses = []
     for i, pt in enumerate(buses):
@@ -429,7 +441,26 @@ def set_country_tags(network):
         c_bus0 = network.buses.loc[network.lines.loc[line, 'bus0'], 'country']
         c_bus1 = network.buses.loc[network.lines.loc[line, 'bus1'], 'country']
         network.lines.loc[line, 'country'] = '{}{}'.format(c_bus0, c_bus1)
-    network.links['country'] = 'SE'
+    
+    transborder_links_0 = network.links[network.links['bus0'].\
+                                            isin(network.foreign_buses)].index
+    transborder_links_1 = network.links[network.links['bus1'].\
+                                        isin(network.foreign_buses)].index
+    
+    #set country tag for lines
+    network.links.loc[transborder_links_0, 'country'] = \
+        network.buses.loc[network.links.loc[transborder_links_0, 'bus0'].values,
+                      'country'].values
+    
+    network.links.loc[transborder_links_1, 'country'] = \
+        network.buses.loc[network.links.loc[transborder_links_1, 'bus1'].values,
+                      'country'].values
+    network.links['country'].fillna('DE', inplace=True)
+    doubles = list(set(transborder_links_0.intersection(transborder_links_1)))
+    for link in doubles:
+        c_bus0 = network.buses.loc[network.links.loc[link, 'bus0'], 'country']
+        c_bus1 = network.buses.loc[network.links.loc[link, 'bus1'], 'country']
+        network.links.loc[link, 'country'] = '{}{}'.format(c_bus0, c_bus1)
 
 def get_transborder_flows(network):
     #positive = imports
@@ -493,7 +524,7 @@ def get_transborder_flows(network):
                   network.links_t.p1[transborder_lines_1]], axis=1).\
                   groupby(network.links['country'], axis=1).sum()
                   
-def crossborder_correction(network, method):
+def crossborder_correction(network, method, capacity_factor):
     if method == 'percentage':
         cap_per_country = {'AT': 0.59,
                            'CH': 0.54,
@@ -532,6 +563,7 @@ def crossborder_correction(network, method):
                                'LUFR': 364,
                                'SEDK': 1928,
                                'DKSE': 1928}
+            capacity_factor = 1
         elif method == 'thermal':
             cap_per_country = {'CH': 12000,
                                 'DK': 4000,
@@ -542,12 +574,15 @@ def crossborder_correction(network, method):
         for country in cap_per_country:
             index = network.lines[network.lines.country == country].index
             network.lines.loc[index, 's_nom'] = \
-                                    weighting[index] * cap_per_country[country]
+                                    weighting[index] * cap_per_country[country] *\
+                                    capacity_factor
             if country == 'SE':
                 network.links.p_nom = cap_per_country[country]
             
         
 def market_simulation(network, method, path_network):
+    broken_lines = network.lines[network.lines.x==float('inf')].index
+    network.lines = network.lines.drop(broken_lines)
     neighbours = network.foreign_buses
     network.import_components_from_dataframe(
             pd.DataFrame({'bus0' : network.lines['bus0'].values,
@@ -568,7 +603,8 @@ def market_simulation(network, method, path_network):
                     replace('_fbmc', '') + '/links-p0.csv'
         linkflows = pd.read_csv(linkpath, index_col=0).abs()
         linkflows = linkflows/network.links.p_nom[linkflows.columns]
-        linkflows['2'] = 0
+        if '2' in linkflows.columns:
+            linkflows['2'] = 0
         
         lineflows.columns = lineflows.columns + 'Link'
         lineflows = pd.concat([linkflows, lineflows], axis=1)
@@ -625,7 +661,7 @@ def ramp_limits(network):
                                    limit] = df.loc[tech, limit]
     network.generators.start_up_cost = network.generators.start_up_cost\
                                         *network.generators.p_nom
-    network.generators.commitable = True
+    network.generators.committable = True
     
 
 def pf_post_lopf(network, scenario):
