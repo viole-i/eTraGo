@@ -577,7 +577,7 @@ def crossborder_correction(network, method, capacity_factor):
                                     weighting[index] * cap_per_country[country] *\
                                     capacity_factor
             if country == 'SE':
-                network.links.p_nom = cap_per_country[country]
+                network.links.loc[network.links.country == country, 'p_nom'] = cap_per_country[country]
             
         
 def market_simulation(network, method, path_network):
@@ -645,9 +645,11 @@ def ramp_limits(network):
             'start_up_fuel':[4.3, 2.8, 1.45, 2.8, 2.8, 4.3, 16.7, 2.8], #in MWh/MW
             'min_up_time':[5, 2, 3, 2, 2, 5, 12, 2], 
             'min_down_time':[7, 2, 2, 2, 2, 7, 17, 2], 
-            'ramp_limit_start_up':[0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.5, 0.4], 
-            'ramp_limit_shut_down':[0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.5, 0.4] 
-            #'p_min_pu':[0.33, 0.38, 0.4, 0.38, 0.38, 0.5, 0.45, 0.38]
+# =============================================================================
+#             'ramp_limit_start_up':[0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.5, 0.4], 
+#             'ramp_limit_shut_down':[0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 0.5, 0.4] 
+# =============================================================================
+            'p_min_pu':[0.33, 0.38, 0.4, 0.38, 0.38, 0.5, 0.45, 0.38]
             }
     df = pd.DataFrame(data, index=carrier)
     fuel_costs = network.generators.marginal_cost.groupby(

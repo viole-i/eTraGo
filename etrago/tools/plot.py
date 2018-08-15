@@ -470,6 +470,7 @@ def plot_residual_load(network):
     sorted_residual_load = residual_load.sort_values(
                                 ascending=False).reset_index()
     sorted_residual_load.plot(drawstyle='steps', lw=1.4, color='red')
+    return residual_load
 
 
 def plot_stacked_gen(network, bus=None, resolution='GW', filename=None):
