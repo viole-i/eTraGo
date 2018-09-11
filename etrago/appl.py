@@ -362,7 +362,7 @@ def etrago(args):
     if args['foreign_lines']['carrier'] == 'DC':
         foreign_links(network)
         network = geolocation_buses(network, session)
-        
+
     if args['foreign_lines']['capacity'] != 'osmTGmod':
         crossborder_capacity(network, args['foreign_lines']['capacity'],
                                args['branch_capacity_factor'])
@@ -386,8 +386,11 @@ def etrago(args):
     if args['generator_noise'] is not False:
         # add random noise to all generators
         s = np.random.RandomState(args['generator_noise'])
-        network.generators.marginal_cost += \
-            abs(s.normal(0, 0.001, len(network.generators.marginal_cost)))
+        network.generators.marginal_cost[network.generators.bus.isin(
+                network.buses.index[network.buses.country_code == 'DE'])] += \
+            abs(s.normal(0, 0.001, len(network.generators.marginal_cost[
+                    network.generators.bus.isin(network.buses.index[
+                            network.buses.country_code == 'DE'])])))
 
     # for SH scenario run do data preperation:
     if (args['scn_name'] == 'SH Status Quo' or
