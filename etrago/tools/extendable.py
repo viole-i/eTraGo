@@ -26,7 +26,8 @@ from etrago.tools.utilities import (
         set_trafo_costs,
         convert_capital_costs,
         find_snapshots,
-        buses_by_country)
+        buses_by_country,
+        get_mv_grid_from_bus_id)
 
 from etrago.cluster.snapshot import snapshot_clustering
 
@@ -42,7 +43,7 @@ __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "ulfmueller, s3pp, wolfbunke, mariusves, lukasol"
 
 
-def extendable(network, args):
+def extendable(network, args, session):
 
     if 'network' in args['extendable']:
         network.lines.s_nom_extendable = True
@@ -151,11 +152,15 @@ def extendable(network, args):
             network.storage_units.loc[network.storage_units.carrier ==
                                       'extendable_storage',
                                       'p_nom_extendable'] = True
+    
+    if 'mv_storage' in args['extendable']:
+        ids = network.storage_units.bus[
+                network.storage_units.carrier == 'extendable_storage']
+        mv_hv_buses = get_mv_grid_from_bus_id(args, session, ids)
+        network.storage_units.p_nom_extendable[
+                network.storage_units.bus.astype(int).isin(
+                        mv_hv_buses.index)] = True
 
-    if 'generators' in args['extendable']:
-        network.generators.p_nom_extendable = True
-        network.generators.p_nom_min = network.generators.p_nom
-        network.generators.p_nom_max = float("inf")
 
     # Extension settings for extension-NEP 2035 scenarios
     if 'NEP Zubaunetz' in args['extendable']:

@@ -32,8 +32,9 @@ import json
 import logging
 import math
 
+from egoio.db_tables import model_draft, grid
 
-geopandas = True
+geopandas = False
 try:
     import geopandas as gpd
     from shapely.geometry import Point
@@ -1576,3 +1577,45 @@ def crossborder_capacity(network, method, capacity_factor):
             network.links.loc[i_links, 'p_nom'] = \
                                 weighting_links[i_links] * cap_per_country\
                                 [country]*capacity_factor
+
+
+def get_mv_grid_from_bus_id(args, session, bus_ids):
+    """
+        Queries the MV grid ID for a given eTraGo bus
+        Parameters
+        ----------
+        bus_id : Pandas Dataframe
+            eTraGo bus ID
+        Returns
+        -------
+        subst_id : Pandas Series
+            MV grid (ding0) and otg (eTraGo) ID
+    """
+    subst_id = pd.DataFrame(index = bus_ids.values)
+    if args['gridversion'] != None:
+        ormclass_hvmv_subst = grid.__getattribute__(
+                'EgoDpHvmvSubstation'
+            )
+        query = session.query(
+                ormclass_hvmv_subst
+            ).filter(
+                ormclass_hvmv_subst.otg_id.in_(subst_id.index.values),
+                ormclass_hvmv_subst.version == args['gridversion']
+            )
+    else:
+         ormclass_hvmv_subst = model_draft.__getattribute__(
+                'EgoGridHvmvSubstation'
+            )
+         
+         query = session.query(
+                ormclass_hvmv_subst
+            ).filter(
+                ormclass_hvmv_subst.otg_id.in_(subst_id.index.values)
+            )
+
+    subst_id = pd.read_sql(
+            query.statement, 
+            query.session.bind,
+            index_col = 'otg_id')['subst_id']      
+    
+    return subst_id
