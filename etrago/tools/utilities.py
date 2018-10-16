@@ -742,7 +742,7 @@ def pf_post_lopf(network, args, extra_functionality, add_foreign_lopf):
         network_pf.lopf(network.snapshots,
             solver_name=args['solver'],
             solver_options={'threads':4,'crossover':0,'method':2, 'NumericFocus':2, 'BarHomogeneous':1, 'BarConvTol':1.e-5,'FeasibilityTol':1.e-6,'logFile':'gurobi_eTraGo.log'},
-            extra_functionality=None)
+            extra_functionality=None, formulation="kirchhoff")
         
         network_pf.storage_units.p_nom_extendable = storages_extendable
         network_pf.lines.s_nom_extendable = lines_extendable 
@@ -1625,7 +1625,7 @@ def set_branch_capacity(network, args):
 
 def max_line_ext(network, share):
     
-    share = 1.5
+    share = 1.25
     #lines = list(network.lines.index)
     lines_snom = network.lines.s_nom.sum()
     links_pnom = network.links.p_nom.sum()

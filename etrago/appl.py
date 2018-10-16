@@ -109,22 +109,22 @@ args = {  # Setup and Configuration:
     'solver_options': {'threads':4, 'method':2, 'crossover':0, 'BarConvTol':1.e-5,
                         'FeasibilityTol':1.e-5, 
                         'logFile':'gurobi_eTraGo_300ego.log'},  # {} for default or dict of solver options
-    'scn_name': 'eGo 100',  # a scenario: Status Quo, NEP 2035, eGo 100
+    'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
     'scn_extension': None, # None or array of extension scenarios
     'scn_decommissioning': None, # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'results': '/home/openego/ego_results/etrago_045_ego100_stogrid_k300_t5_net1.5max_eachline4max_capcosts4_foreignexttrue',  # save results as csv: False or /path/tofolder
+    'results': '/home/openego/ego_results/etrago_045_nep_stogrid_k300_t5_1105_netw125_eachline4max_4xcapcosts_ntc_04102018',  # save results as csv: False or /path/tofolder
     'export': False,  # export the results back to the oedb
     # Settings:
-    'extendable': ['network', 'storage'],  # Array of components to optimize
+    'extendable': ['network', 'storages'],  # Array of components to optimize
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False, # Choose if using ramp limit of generators
     # Clustering:
     'network_clustering_kmeans': 300,  # False or the value k for clustering
-    'load_cluster': False,  # False or predefined busmap for k-means
+    'load_cluster': "/home/openego/eTraGo/etrago/cluster_coord_k_300_nep",  # False or predefined busmap for k-means
     'network_clustering_ehv': False,  # clustering of HV buses to EHV buses.
     'disaggregation': 'uniform', # or None, 'mini' or 'uniform'
     'snapshot_clustering': False,  # False or the number of 'periods'
@@ -134,11 +134,11 @@ args = {  # Setup and Configuration:
     'line_grouping': False,  # group lines parallel lines
     'branch_capacity_factor': {'HV': 0.5, 'eHV' : 0.7},  # factors to change branch capacities
     'load_shedding': False, # meet the demand at very high cost
-    'foreign_lines' : {'carrier': 'AC', 'capacity': 'osmTGmod'}, # dict containing carrier and capacity settings of foreign lines
+    'foreign_lines' : {'carrier': 'AC', 'capacity': 'ntc_acer'}, # dict containing carrier and capacity settings of foreign lines
     'comments': None}
 
 
-args = get_args_setting(args, jsonpath = None)
+args = get_args_setting(args, jsonpath = '/home/openego/eTraGo/etrago/args_ego100base.json')
 
 
 def etrago(args):
@@ -450,11 +450,14 @@ def etrago(args):
     
     network.storage_units.loc[network.storage_units.carrier == 'battery_storage','marginal_cost'] = network.storage_units.loc[(network.storage_units.carrier == 'extendable_storage') & (network.storage_units.max_hours == 6),'marginal_cost'].max()
     network.storage_units.loc[network.storage_units.carrier == 'hydrogen_storage','marginal_cost'] = network.storage_units.loc[(network.storage_units.carrier == 'extendable_storage') & (network.storage_units.max_hours == 168),'marginal_cost'].max()
-#    
-#    # each line and link is allowed to be extended to a max of line_max
-    line_max = 4
+    
+    # each line and link is allowed to be extended to a max of line_max
+    line_max = 8
     network.links.p_nom_max = network.links.p_nom * line_max
     network.lines.s_nom_max = network.lines.s_nom * line_max
+
+#    network.lines.s_nom_min = network.lines.s_nom_min * 1.5
+#    network.links.p_nom_min = network.links.p_nom_min * 1.5
 
     # skip snapshots
     if args['skip_snapshots']:
@@ -522,7 +525,7 @@ def etrago(args):
             network.snapshots,
             solver_name=args['solver'],
             solver_options=args['solver_options'],
-            extra_functionality=max_line_ext, formulation="kirchhoff")
+            extra_functionality=None, formulation="kirchhoff")
         y = time.time()
         z = (y - x) / 60
         # z is time for lopf in minutes
