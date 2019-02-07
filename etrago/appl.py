@@ -91,7 +91,10 @@ if 'READTHEDOCS' not in os.environ:
         get_args_setting,
         set_branch_capacity,
         max_line_ext,
-        min_renewable_share)
+        min_renewable_share,
+        vlh_coal_lignite,
+        cross_border_flow,
+        cross_border_flows_per_country)
 
     from etrago.tools.extendable import (
             extendable,
@@ -111,14 +114,14 @@ args = {
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 12,
-    'end_snapshot': 13,
+    'end_snapshot': 14,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'method':2, 'crossover':0,
                        'logFile': 'solver.log'},  # {} for default options
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
-    'scn_extension': None,  # None or array of extension scenarios
-    'scn_decommissioning': None,  # None or decommissioning scenario
+    'scn_extension': ['nep2035_b2'],  # None or array of extension scenarios
+    'scn_decommissioning': ['nep2035_b2', 'coal_phase_out'],  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
     'csv_export': False,  # save results as csv: False or /path/tofolder
@@ -128,7 +131,7 @@ args = {
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False,  # Choose if using ramp limit of generators
-    'extra_functionality': None,  # Choose function name or None
+    'extra_functionality':None,  # Choose function name or None
     # Clustering:
     'network_clustering_kmeans': 50,  # False or the value k for clustering
     'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
@@ -364,9 +367,6 @@ def etrago(args):
                                scn_name=args['scn_name'])
 
     network = scenario.build_network()
-    
-    network.generators.p_nom_min=0
-    network.generators.p_nom_max=np.inf
 
     # add coordinates
     network = add_coordinates(network)
@@ -439,19 +439,21 @@ def etrago(args):
                     end_snapshot=args['end_snapshot'])
         network = geolocation_buses(network, session)
 
+    # Add missing lines in Munich and Stuttgart
+    network = add_missing_components(network)
+
     # set Branch capacity factor for lines and transformer
     if args['branch_capacity_factor']:
         set_branch_capacity(network, args)
 
     # scenario decommissioning
     if args['scn_decommissioning'] is not None:
-        network = decommissioning(
-            network,
-            session,
-            args)
-
-    # Add missing lines in Munich and Stuttgart
-    network = add_missing_components(network)
+        for i in range(len(args['scn_decommissioning'])):
+            network = decommissioning(
+                    network,
+                    session,
+                    args,
+                    args['scn_decommissioning'][i])
 
     # investive optimization strategies
     if args['extendable'] != []:
@@ -503,6 +505,7 @@ def etrago(args):
         disaggregated_network = (
                 network.copy() if args.get('disaggregation') else None)
         network = clustering.network.copy()
+        network = geolocation_buses(network, session)
 
     if args['ramp_limits']:
         ramp_limits(network)

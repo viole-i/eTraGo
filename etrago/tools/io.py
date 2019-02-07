@@ -763,7 +763,7 @@ def extension (network, session, version, scn_extension, start_snapshot,
                
     return network
 
-def decommissioning(network, session, args, **kwargs):
+def decommissioning(network, session, args, scn, **kwargs):
     """
     Function that removes components in a decommissioning-scenario from
     the existing network container.
@@ -787,42 +787,49 @@ def decommissioning(network, session, args, **kwargs):
         network : Network container including decommissioning
           
     """  
-
-    if args['gridversion'] == None:   
-        ormclass = getattr(import_module('egoio.db_tables.model_draft'),
-                           'EgoGridPfHvExtensionLine')
+    if scn == 'coal_phase_out':
+        coal_gens_de = network.generators.index[(network.generators.bus.isin(
+                network.buses.index[network.buses.country_code=='DE'])) & (
+                network.generators.carrier.isin(['coal', 'lignite']))]
+        network.generators=network.generators[~network.generators.index.isin(
+                coal_gens_de)]
+        
     else:
-        ormclass = getattr(import_module('egoio.db_tables.grid'),
+        if args['gridversion'] == None:   
+            ormclass = getattr(import_module('egoio.db_tables.model_draft'),
+                           'EgoGridPfHvExtensionLine')
+        else:
+                ormclass = getattr(import_module('egoio.db_tables.grid'),
                            'EgoPfHvExtensionLine')
 
-    query = session.query(ormclass).filter(
+        query = session.query(ormclass).filter(
                         ormclass.scn_name == 'decommissioning_' + 
-                        args['scn_decommissioning'])
+                        scn)
 
-    df_decommisionning = pd.read_sql(query.statement,
+        df_decommisionning = pd.read_sql(query.statement,
                          session.bind,
                          index_col='line_id')
-    df_decommisionning.index = df_decommisionning.index.astype(str)
+        df_decommisionning.index = df_decommisionning.index.astype(str)
 
-    for idx, row in network.lines.iterrows():
-        if (row['s_nom_min'] !=0) & (
-            row['scn_name'] =='extension_' + args['scn_decommissioning']):
+        for idx, row in network.lines.iterrows():
+            if (row['s_nom_min'] !=0) & (
+                    row['scn_name'] =='extension_' + scn):
                 v_nom_dec = df_decommisionning['v_nom'][(
                  df_decommisionning.project == row['project']) & (
                          df_decommisionning.project_id == row['project_id'])]
 
                 if (v_nom_dec == 110).any():
-                    network.lines.s_nom_min[network.lines.index == idx]\
-                    = args['branch_capacity_factor']['HV'] *\
-                    network.lines.s_nom_min
+                        network.lines.s_nom_min[network.lines.index == idx]\
+                        = args['branch_capacity_factor']['HV'] *\
+                        network.lines.s_nom_min
 
                 else:
-                    network.lines.s_nom_min[network.lines.index == idx] =\
-                    args['branch_capacity_factor']['eHV'] *\
-                    network.lines.s_nom_min
+                        network.lines.s_nom_min[network.lines.index == idx] =\
+                        args['branch_capacity_factor']['eHV'] *\
+                        network.lines.s_nom_min
 
     ### Drop decommissioning-lines from existing network
-    network.lines = network.lines[~network.lines.index.isin(
+        network.lines = network.lines[~network.lines.index.isin(
             df_decommisionning.index)]
 
     return network
