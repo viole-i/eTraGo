@@ -93,7 +93,8 @@ class Constraints:
             network.model.min_renewable_share = Constraint(rule=_rule)
             
             
-            if 'cross_border_flow' in self.args['extra_functionality'].keys():
+        if 'cross_border_flow' in self.args['extra_functionality'].keys():
+
             # Identify cross-border-lines in respect of order of buses 
                 cb0 = network.lines.index[(network.lines.bus0.isin(
                         network.buses.index[network.buses.country_code!='DE'])
@@ -155,7 +156,7 @@ class Constraints:
                 network.model.cross_border_flows_min = Constraint(rule=_rule_min)
                 network.model.cross_border_flows_max = Constraint(rule=_rule_max)
 
-            if 'cross_border_flow_per_country' in self.args['extra_functionality'].keys():
+        if 'cross_border_flow_per_country' in self.args['extra_functionality'].keys():
                 snapshots=network.snapshots
     
                 countries = network.buses.country_code.unique()
