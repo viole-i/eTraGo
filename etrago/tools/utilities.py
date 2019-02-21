@@ -1181,19 +1181,19 @@ def set_line_costs(network, args,
     """
     network.lines["v_nom"] = network.lines.bus0.map(network.buses.v_nom)
 
-    network.lines.loc[(network.lines.v_nom == 110),
+    network.lines.loc[((network.lines.v_nom == 110) & network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost110 * network.lines.length /\
                           args['branch_capacity_factor']['HV']
                       
-    network.lines.loc[(network.lines.v_nom == 220),
+    network.lines.loc[((network.lines.v_nom == 220) & network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost220 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.lines.loc[(network.lines.v_nom == 380),
+    network.lines.loc[((network.lines.v_nom == 380) & network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost380 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.links.loc[network.links.p_nom_extendable,
+    network.links.loc[(network.links.p_nom_extendable  & network.lines.capital_cost.isnull()),
                       'capital_cost'] = costDC * network.links.length
 
     return network
