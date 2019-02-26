@@ -91,16 +91,13 @@ if 'READTHEDOCS' not in os.environ:
         get_args_setting,
         set_branch_capacity,
         max_line_ext,
-        min_renewable_share,
-        vlh_coal_lignite,
-        cross_border_flow,
-        cross_border_flows_per_country)
+        min_renewable_share)
 
     from etrago.tools.extendable import (
             extendable,
             extension_preselection,
             print_expansion_costs)
-
+    from etrago.tools.constraints import Constraints
     from etrago.cluster.snapshot import snapshot_clustering, daily_bounds
     from egoio.tools import db
     from sqlalchemy.orm import sessionmaker
@@ -110,18 +107,18 @@ if 'READTHEDOCS' not in os.environ:
 args = {
     # Setup and Configuration:
     'db': 'oedb',  # database session
-    'gridversion': 'v0.4.5',  # None for model_draft or Version number
+    'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 12,
-    'end_snapshot': 24,
+    'end_snapshot': 13,
     'solver': 'gurobi',  # glpk, cplex or gurobi
-    'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'method':2, 'crossover':0,
-                       'logFile': 'solver.log'},  # {} for default options
+    'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
+                       'logFile': 'solver.log', 'threads':4, 'method':2, 'crossover':0},  # {} for default options
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
-    'scn_extension': None,  # None or array of extension scenarios
-    'scn_decommissioning': None,  # None or decommissioning scenario
+    'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035'],  # None or array of extension scenarios
+    'scn_decommissioning': 'nep2035_b2',  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
     'csv_export': False,  # save results as csv: False or /path/tofolder
@@ -131,7 +128,7 @@ args = {
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False,  # Choose if using ramp limit of generators
-    'extra_functionality': {'max_line_ext': 1.2, 'min_renewable_share':0.8},  # Choose function name or None
+    'extra_functionality': None,  # Choose function name or None
     # Clustering:
     'network_clustering_kmeans': 50,  # False or the value k for clustering
     'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
@@ -495,7 +492,13 @@ def etrago(args):
     # ehv network clustering
     if args['network_clustering_ehv']:
         network.generators.control = "PV"
-        busmap = busmap_from_psql(network, session, scn_name=args['scn_name'])
+        busmap = busmap_from_psql(
+                network,
+                session,
+                scn_name=(
+                        args['scn_name'] if args['scn_extension']==None
+                        else args['scn_name']+'_ext_'+'_'.join(
+                                args['scn_extension'])))
         network = cluster_on_extra_high_voltage(
             network, busmap, with_time=True)
 
