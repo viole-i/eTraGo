@@ -1193,7 +1193,7 @@ def set_line_costs(network, args,
                       'capital_cost'] = cost380 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.links.loc[(network.links.p_nom_extendable  & network.lines.capital_cost.isnull()),
+    network.links.loc[(network.links.p_nom_extendable  & network.links.capital_cost.isnull()),
                       'capital_cost'] = costDC * network.links.length
 
     return network
