@@ -91,7 +91,8 @@ if 'READTHEDOCS' not in os.environ:
         get_args_setting,
         set_branch_capacity,
         max_line_ext,
-        min_renewable_share)
+        min_renewable_share,
+        iterate_lopf)
 
     from etrago.tools.extendable import (
             extendable,
@@ -121,7 +122,7 @@ args = {
     'scn_decommissioning': 'nep2035_b2',  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'csv_export': False,  # save results as csv: False or /path/tofolder
+    'csv_export': 'results',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
     'extendable': ['network', 'storage'],  # Array of components to optimize
@@ -542,17 +543,7 @@ def etrago(args):
 
     # start linear optimal powerflow calculations
     elif args['method'] == 'lopf':
-        x = time.time()
-        network.lopf(
-            network.snapshots,
-            solver_name=args['solver'],
-            solver_options=args['solver_options'],
-            extra_functionality=Constraints(args).functionality,
-            formulation="angles")
-        y = time.time()
-        z = (y - x) / 60
-        # z is time for lopf in minutes
-        print("Time for LOPF [min]:", round(z, 2))
+        iterate_lopf(network, args, n_iter=3)
 
         # start non-linear powerflow simulation
     elif args['method'] is 'pf':

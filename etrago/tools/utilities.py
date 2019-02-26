@@ -1791,6 +1791,43 @@ def set_branch_capacity(network, args):
     network.transformers.s_nom[network.transformers.v_nom0 > 110]\
         = network.transformers.s_nom * args['branch_capacity_factor']['eHV']
 
+def iterate_lopf(network, args, n_iter):
+    
+    if network.lines.s_nom_extendable.any():
+        for i in range (1,(1+n_iter)):
+            x = time.time()
+            network.lopf(
+                    network.snapshots,
+                    solver_name=args['solver'],
+                    solver_options=args['solver_options'],
+                    extra_functionality=None,
+                    formulation="angles")
+            y = time.time()
+            z = (y - x) / 60
+            # z is time for lopf in minutes
+            print("Time for LOPF [min]:", round(z, 2))
+            if args['csv_export'] != False:
+                network.export_to_csv_folder(args['csv_export']+ '/lopf_iteration_'+ str(i))
+
+            network.lines.x[network.lines.s_nom_extendable] = \
+            network.lines.x * network.lines.s_nom /\
+            network.lines.s_nom_opt
+            
+    else:
+        x = time.time()
+        network.lopf(
+                    network.snapshots,
+                    solver_name=args['solver'],
+                    solver_options=args['solver_options'],
+                    extra_functionality=None,
+                    formulation="angles")
+        y = time.time()
+        z = (y - x) / 60
+            # z is time for lopf in minutes
+        print("Time for LOPF [min]:", round(z, 2))
+            
+    return network
+            
 def max_line_ext(network, snapshots, share=1.01):
 
     """
