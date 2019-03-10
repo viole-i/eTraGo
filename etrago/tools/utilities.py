@@ -31,7 +31,7 @@ import pypsa
 import json
 import logging
 import math
-
+from etrago.tools.constraints import Constraints
 
 geopandas = True
 try:
@@ -1800,8 +1800,8 @@ def iterate_lopf(network, args, n_iter):
                     network.snapshots,
                     solver_name=args['solver'],
                     solver_options=args['solver_options'],
-                    extra_functionality=None,
-                    formulation="angles")
+                    extra_functionality=Constraints(args).functionality,
+                    formulation="kirchhoff")
             y = time.time()
             z = (y - x) / 60
             # z is time for lopf in minutes
