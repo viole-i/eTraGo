@@ -31,6 +31,7 @@ import pypsa
 import json
 import logging
 import math
+from etrago.tools.constraints import Constraints
 
 
 geopandas = True
@@ -1181,19 +1182,19 @@ def set_line_costs(network, args,
     """
     network.lines["v_nom"] = network.lines.bus0.map(network.buses.v_nom)
 
-    network.lines.loc[((network.lines.v_nom == 110) & network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 110)),#& network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost110 * network.lines.length /\
                           args['branch_capacity_factor']['HV']
                       
-    network.lines.loc[((network.lines.v_nom == 220) & network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 220)), #& network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost220 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.lines.loc[((network.lines.v_nom == 380) & network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 380)),#& network.lines.capital_cost.isnull()),
                       'capital_cost'] = cost380 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.links.loc[(network.links.p_nom_extendable  & network.links.capital_cost.isnull()),
+    network.links.loc[(network.links.p_nom_extendable),# & network.links.capital_cost.isnull()),
                       'capital_cost'] = costDC * network.links.length
 
     return network
@@ -1800,8 +1801,8 @@ def iterate_lopf(network, args, n_iter):
                     network.snapshots,
                     solver_name=args['solver'],
                     solver_options=args['solver_options'],
-                    extra_functionality=None,
-                    formulation="angles")
+                    extra_functionality=Constraints(args).functionality,
+                    formulation="kirchhoff")
             y = time.time()
             z = (y - x) / 60
             # z is time for lopf in minutes
@@ -1809,9 +1810,13 @@ def iterate_lopf(network, args, n_iter):
             if args['csv_export'] != False:
                 network.export_to_csv_folder(args['csv_export']+ '/lopf_iteration_'+ str(i))
 
-            network.lines.x[network.lines.s_nom_extendable] = \
-            network.lines.x * network.lines.s_nom /\
-            network.lines.s_nom_opt
+            if i < n_iter:
+            	network.lines.x[network.lines.s_nom_extendable] = \
+            	network.lines.x * network.lines.s_nom_min /\
+            	network.lines.s_nom_opt
+            	network.lines.s_nom_min = network.lines.s_nom_opt.copy()
+            	network.links.p_nom_min = network.links.p_nom_opt.copy()
+            	network.storage_units.p_nom_min = network.storage_units.p_nom_opt.copy()
             
     else:
         x = time.time()
