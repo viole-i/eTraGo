@@ -290,7 +290,7 @@ def busmap_by_shortest_path(network, session, scn_name, fromlvl, tolvl,
     dump(df, open('df.p', 'wb'))
 
     # post processing
-    df.sortlevel(inplace=True)
+    df.sort_index(inplace=True)
     mask = df.groupby(level='source')['path_length'].idxmin()
     df = df.loc[mask, :]
 
