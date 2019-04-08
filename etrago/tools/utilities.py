@@ -33,7 +33,6 @@ import logging
 import math
 from etrago.tools.constraints import Constraints
 
-
 geopandas = True
 try:
     import geopandas as gpd
