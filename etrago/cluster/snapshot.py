@@ -43,7 +43,7 @@ __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "Simon Hilpert"
 
 
-def snapshot_clustering(network, how='daily', clusters=10):
+def snapshot_clustering(network, how='daily', clusters=[]):
     """
     """
 
