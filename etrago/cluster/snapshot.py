@@ -46,9 +46,15 @@ __author__ = "Simon Hilpert"
 def snapshot_clustering(network, how='daily', clusters=[]):
     """
     """
-
-    network, df_cluster = run(network=network.copy(), n_clusters=clusters,
+    
+    # original problem
+    run(network=network.copy(), path=resultspath, write_results=write_results, n_clusters=None,
                   how=how, normed=False)
+    
+    for c in clusters:
+        path=os.path.join(resultspath, how)
+        run(network=network.copy(), path=path, write_results=write_results, n_clusters=c, 
+            how=how, normed=False)
 
     return network, df_cluster
 
@@ -135,19 +141,36 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
              
     return df_cluster, cluster_weights, dates, hours
 
-def run(network, n_clusters=None, how='daily',
+def run(network, path, write_results=False, n_clusters=None, how='daily',
         normed=False):
     """
     """
-    # reduce storage costs due to clusters
-    network.cluster = True
+    
+    if n_clusters is not None:
+        path=os.path.join(path, str(n_clusters))
+        
+        # reduce storage costs due to clusters
+        network.cluster = True
 
-    # calculate clusters
-    df_cluster, cluster_weights, dates, hours = tsam_cluster(prepare_pypsa_timeseries(network),
+        # calculate clusters
+        df_cluster, cluster_weights, dates, hours = tsam_cluster(prepare_pypsa_timeseries(network),
                            typical_periods=n_clusters,
                            how='daily')       
-    network.cluster = df_cluster
-    update_data_frames(network, cluster_weights, dates, hours)                 
+        network.cluster = df_cluster
+        update_data_frames(network, cluster_weights, dates, hours)   
+        
+    else:
+        network.cluster=False
+        path=os.path.join(path, 'original')
+        
+    snapshots=network.snapshots
+        
+    network_lopf(network, snapshots, extra_functionality=snapshots_cluster_constraints,
+                     solver_name='gurobi', solver_options=('BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0))
+               
+    if write_results:
+        results_to_csv(network, path)
+        write_lpfile(network, path=os.path.join(path, 'file.lp'))
     
     return network, df_cluster
 
