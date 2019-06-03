@@ -150,44 +150,34 @@ args = get_args_setting(args, jsonpath=None)
 
 def etrago(args):
     """The etrago function works with following arguments:
-
-
     Parameters
     ----------
-
     db : str
         ``'oedb'``,
         Name of Database session setting stored in *config.ini* of *.egoio*
-
     gridversion : NoneType or str
         ``'v0.2.11'``,
         Name of the data version number of oedb: state ``'None'`` for
         model_draft (sand-box) or an explicit version number
         (e.g. 'v0.2.10') for the grid schema.
-
     method : str
         ``'lopf'``,
         Choose between a non-linear power flow ('pf') or
         a linear optimal power flow ('lopf').
-
     pf_post_lopf : bool
         False,
         Option to run a non-linear power flow (pf) directly after the
         linear optimal power flow (and thus the dispatch) has finished.
-
     start_snapshot : int
         1,
         Start hour of the scenario year to be calculated.
-
     end_snapshot : int
         2,
         End hour of the scenario year to be calculated.
-
     solver : str
         'glpk',
         Choose your preferred solver. Current options: 'glpk' (open-source),
         'cplex' or 'gurobi'.
-
     scn_name : str
         'Status Quo',
         Choose your scenario. Currently, there are three different
@@ -195,7 +185,6 @@ def etrago(args):
         want to use the full German dataset, you can use the excerpt of
         Schleswig-Holstein by adding the acronym SH to the scenario
         name (e.g. 'SH Status Quo').
-
    scn_extension : NoneType or list
        None,
        Choose extension-scenarios which will be added to the existing
@@ -209,7 +198,6 @@ def etrago(args):
            Netzentwicklungsplan 2025 in scenario 2035 B2
            'BE_NO_NEP 2035' includes planned lines to Belgium and Norway and
            adds BE and NO as electrical neighbours
-
     scn_decommissioning : str
         None,
         Choose an extra scenario which includes lines you want to decommise
@@ -223,22 +211,18 @@ def etrago(args):
             confirmed projects
             'nep2035_b2' includes all lines that will be replaced in
             NEP-scenario 2035 B2
-
     lpfile : obj
         False,
         State if and where you want to save pyomo's lp file. Options:
         False or '/path/tofolder'.import numpy as np
-
     csv_export : obj
         False,
         State if and where you want to save results as csv files.Options:
         False or '/path/tofolder'.
-
     db_export : bool
         False,
         State if you want to export the results of your calculation
         back to the database.
-
     extendable : list
         ['network', 'storages'],
         Choose components you want to optimize.
@@ -256,23 +240,18 @@ def etrago(args):
                         the flexibility demand.
             'network_preselection': set only preselected lines extendable,
                                     method is chosen in function call
-
-
     generator_noise : bool or int
         State if you want to apply a small random noise to the marginal costs
         of each generator in order to prevent an optima plateau. To reproduce
         a noise, choose the same integer (seed number).
-
     minimize_loading : bool
         False,
         ...
-
     ramp_limits : bool
         False,
         State if you want to consider ramp limits of generators.
         Increases time for solving significantly.
         Only works when calculating at least 30 snapshots.
-
     extra_functionality : str or None
         None,
         Choose name of extra functionality described in etrago/utilities.py
@@ -280,7 +259,6 @@ def etrago(args):
         "max_line_ext" to set an overall maximum of line expansion.
         When activating snapshot_clustering or minimize_loading these
         extra_funtionalities are overwritten and therefore neglected.
-
     network_clustering_kmeans : bool or int
         False,
         State if you want to apply a clustering of all network buses down to
@@ -289,56 +267,46 @@ def etrago(args):
         at each node. If so, state the number of k you want to apply. Otherwise
         put False. This function doesn't work together with
         ``'line_grouping = True'``.
-
     load_cluster : bool or obj
         state if you want to load cluster coordinates from a previous run:
         False or /path/tofile (filename similar to ./cluster_coord_k_n_result).
-
     network_clustering_ehv : bool
         False,
         Choose if you want to cluster the full HV/EHV dataset down to only the
         EHV buses. In that case, all HV buses are assigned to their closest EHV
         sub-station, taking into account the shortest distance on power lines.
-
     snapshot_clustering : bool or int
         False,
         State if you want to cluster the snapshots and run the optimization
         only on a subset of snapshot periods. The int value defines the number
         of periods (i.e. days) which will be clustered to.
         Move to PyPSA branch:features/snapshot_clustering
-
     parallelisation : bool
         False,
         Choose if you want to calculate a certain number of snapshots in
         parallel. If yes, define the respective amount in the if-clause
         execution below. Otherwise state False here.
-
     line_grouping : bool
         True,
         State if you want to group lines that connect the same two buses
         into one system.
-
     branch_capacity_factor : dict
         {'HV': 0.5, 'eHV' : 0.7},
         Add a factor here if you want to globally change line capacities
         (e.g. to "consider" an (n-1) criterion or for debugging purposes).
-
     load_shedding : bool
         False,
         State here if you want to make use of the load shedding function which
         is helpful when debugging: a very expensive generator is set to each
         bus and meets the demand when regular
         generators cannot do so.
-
     foreign_lines : dict
         {'carrier':'AC', 'capacity': 'osmTGmod}'
         Choose transmission technology and capacity of foreign lines:
             'carrier': 'AC' or 'DC'
             'capacity': 'osmTGmod', 'ntc_acer' or 'thermal_acer'
-
     comments : str
         None
-
     Returns
     -------
     network : `pandas.DataFrame<dataframe>`
@@ -467,172 +435,170 @@ def etrago(args):
 
     # snapshot clustering
     if not args['snapshot_clustering'] is False:
-        
-        nclust=[1, 2]
-        for i in nclust:
-            print('++Start model with '+str(i)+' snapshot(s)++')
-            network_i, df_cluster_i = snapshot_clustering(
-            network, how='daily', clusters=i)
-            extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint
+        nsnap=[1,2]
+        network, df_cluster = snapshot_clustering(
+            network,  how='daily', clusters=nsnap)
+        extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint
 
     # load shedding in order to hunt infeasibilities
-            if args['load_shedding']:
-                load_shedding(network)
+    if args['load_shedding']:
+        load_shedding(network)
 
     # ehv network clustering
-            if args['network_clustering_ehv']:
-                network.generators.control = "PV"
-                busmap = busmap_from_psql(
-                        network,
-                        session,
-                        scn_name=(
-                                args['scn_name'] if args['scn_extension']==None
+    if args['network_clustering_ehv']:
+        network.generators.control = "PV"
+        busmap = busmap_from_psql(
+                network,
+                session,
+                scn_name=(
+                        args['scn_name'] if args['scn_extension']==None
                         else args['scn_name']+'_ext_'+'_'.join(
                                 args['scn_extension'])))
-                network = cluster_on_extra_high_voltage(
-                        network, busmap, with_time=True)
-                
+        network = cluster_on_extra_high_voltage(
+            network, busmap, with_time=True)
+
     # k-mean clustering
-            if not args['network_clustering_kmeans'] == False:
-                clustering = kmean_clustering(
-                        network,
-                        n_clusters=args['network_clustering_kmeans'],
-                        load_cluster=args['load_cluster'],
-                        line_length_factor=1,
-                        remove_stubs=False,
-                        use_reduced_coordinates=False,
-                        bus_weight_tocsv=None,
-                        bus_weight_fromcsv=None,
-                        n_init=10,
-                        max_iter=100,
-                        tol=1e-6,
-                        n_jobs=-1)
-                disaggregated_network = (
-                            network.copy() if args.get('disaggregation') else None)
-                network = clustering.network.copy()
-                if extra_functionality == snapshot_cluster_constraints:
-                    network.cluster=df_cluster_i
+    if not args['network_clustering_kmeans'] == False:
+        clustering = kmean_clustering(
+                network,
+                n_clusters=args['network_clustering_kmeans'],
+                load_cluster=args['load_cluster'],
+                line_length_factor=1,
+                remove_stubs=False,
+                use_reduced_coordinates=False,
+                bus_weight_tocsv=None,
+                bus_weight_fromcsv=None,
+                n_init=10,
+                max_iter=100,
+                tol=1e-6,
+                n_jobs=-1)
+        disaggregated_network = (
+                network.copy() if args.get('disaggregation') else None)
+        network = clustering.network.copy()
+        if extra_functionality == snapshot_cluster_constraints:
+            network.cluster=df_cluster
             
 
-                if args['ramp_limits']:
-                    ramp_limits(network)
+    if args['ramp_limits']:
+        ramp_limits(network)
 
     # preselection of extendable lines
-                if 'network_preselection' in args['extendable']:
-                    extension_preselection(network, args, 'snapshot_clustering', 2)
+    if 'network_preselection' in args['extendable']:
+        extension_preselection(network, args, 'snapshot_clustering', 2)
 
     # parallisation
-                if args['parallelisation']:
-                    parallelisation(
-                            network,
-                            start_snapshot=args['start_snapshot'],
-                            end_snapshot=args['end_snapshot'],
-                            group_size=1,
-                            solver_name=args['solver'],
-                            solver_options=args['solver_options'],
-                            extra_functionality=extra_functionality)
+    if args['parallelisation']:
+        parallelisation(
+            network,
+            start_snapshot=args['start_snapshot'],
+            end_snapshot=args['end_snapshot'],
+            group_size=1,
+            solver_name=args['solver'],
+            solver_options=args['solver_options'],
+            extra_functionality=extra_functionality)
 
     # start linear optimal powerflow calculations
-                elif args['method'] == 'lopf':
-                    x = time.time()
-                    network.lopf(
-                            network.snapshots,
-                            solver_name=args['solver'],
-                            solver_options=args['solver_options'],
-                            extra_functionality=extra_functionality, formulation="angles")
-                    y = time.time()
-                    z = (y - x) / 60
-                    # z is time for lopf in minutes
-                    print("Time for LOPF [min]:", round(z, 2))
+    elif args['method'] == 'lopf':
+        x = time.time()
+        network.lopf(
+            network.snapshots,
+            solver_name=args['solver'],
+            solver_options=args['solver_options'],
+            extra_functionality=extra_functionality, formulation="angles")
+        y = time.time()
+        z = (y - x) / 60
+        # z is time for lopf in minutes
+        print("Time for LOPF [min]:", round(z, 2))
 
-    # start non-linear powerflow simulation
-                elif args['method'] is 'pf':
-                        network.pf(scenario.timeindex)
-                        # calc_line_losses(network)
+        # start non-linear powerflow simulation
+    elif args['method'] is 'pf':
+        network.pf(scenario.timeindex)
+        # calc_line_losses(network)
 
-                if args['pf_post_lopf']:
-                    x = time.time()
-                    pf_solution = pf_post_lopf(network,
+    if args['pf_post_lopf']:
+        x = time.time()
+        pf_solution = pf_post_lopf(network,
                                    args,
                                    extra_functionality,
                                    add_foreign_lopf=True)
-                    y = time.time()
-                    z = (y - x) / 60
-                    print("Time for PF [min]:", round(z, 2))
-                    calc_line_losses(network)
-                    network = distribute_q(network, allocation='p_nom')
+        y = time.time()
+        z = (y - x) / 60
+        print("Time for PF [min]:", round(z, 2))
+        calc_line_losses(network)
+        network = distribute_q(network, allocation='p_nom')
 
-                if not args['extendable'] == []:
-                    print_expansion_costs(network, args)
+    if not args['extendable'] == []:
+        print_expansion_costs(network, args)
 
-                if clustering:
-                    disagg = args.get('disaggregation')
-                    skip = () if args['pf_post_lopf'] else ('q',)
-                    t = time.time()
-                    if disagg:
-                        if disagg == 'mini':
-                            disaggregation = MiniSolverDisaggregation(
-                                    disaggregated_network,
-                                    network,
-                                    clustering,
-                                    skip=skip)
-                        elif disagg == 'uniform':
-                            disaggregation = UniformDisaggregation(disaggregated_network,
+    if clustering:
+        disagg = args.get('disaggregation')
+        skip = () if args['pf_post_lopf'] else ('q',)
+        t = time.time()
+        if disagg:
+            if disagg == 'mini':
+                disaggregation = MiniSolverDisaggregation(
+                        disaggregated_network,
+                        network,
+                        clustering,
+                        skip=skip)
+            elif disagg == 'uniform':
+                disaggregation = UniformDisaggregation(disaggregated_network,
                                                        network,
                                                        clustering,
                                                        skip=skip)
-                        else:
-                            raise Exception('Invalid disaggregation command: ' + disagg)
 
-                        disaggregation.execute(scenario, solver=args['solver'])
-                        # temporal bug fix for solar generator which ar during night time
-                        # nan instead of 0
-                        disaggregated_network.generators_t.p.fillna(0, inplace=True)
-                        disaggregated_network.generators_t.q.fillna(0, inplace=True)
+            else:
+                raise Exception('Invalid disaggregation command: ' + disagg)
 
-                        disaggregated_network.results = network.results
-                        print("Time for overall desaggregation [min]: {:.2}"
-                              .format((time.time() - t) / 60))
+            disaggregation.execute(scenario, solver=args['solver'])
+            # temporal bug fix for solar generator which ar during night time
+            # nan instead of 0
+            disaggregated_network.generators_t.p.fillna(0, inplace=True)
+            disaggregated_network.generators_t.q.fillna(0, inplace=True)
+
+            disaggregated_network.results = network.results
+            print("Time for overall desaggregation [min]: {:.2}"
+                .format((time.time() - t) / 60))
 
     # write lpfile to path
-            if not args['lpfile'] is False:
-                network.model.write(
-                        args['lpfile'], io_options={
-                                'symbolic_solver_labels': True})
+    if not args['lpfile'] is False:
+        network.model.write(
+            args['lpfile'], io_options={
+                'symbolic_solver_labels': True})
 
     # write PyPSA results back to database
-            if args['db_export']:
-                username = str(conn.url).split('//')[1].split(':')[0]
-                args['user_name'] = username
+    if args['db_export']:
+        username = str(conn.url).split('//')[1].split(':')[0]
+        args['user_name'] = username
 
-                results_to_oedb(
-                        session,
-                        network,
-                        dict([("disaggregated_results", False)] + list(args.items())),
-                        grid='hv',
-                        safe_results=False)
+        results_to_oedb(
+            session,
+            network,
+            dict([("disaggregated_results", False)] + list(args.items())),
+            grid='hv',
+            safe_results=False)
 
-                if disaggregated_network:
-                    results_to_oedb(
-                            session,
-                            disaggregated_network,
-                            dict([("disaggregated_results", True)] + list(args.items())),
-                            grid='hv',
-                            safe_results=False)
+        if disaggregated_network:
+            results_to_oedb(
+                session,
+                disaggregated_network,
+                dict([("disaggregated_results", True)] + list(args.items())),
+                grid='hv',
+                safe_results=False)
 
     # write PyPSA results to csv to path
-            if not args['csv_export'] is False:
-                if not args['pf_post_lopf']:
-                    results_to_csv(network, args)
-                else:
-                    results_to_csv(network, args, pf_solution=pf_solution)
+    if not args['csv_export'] is False:
+        if not args['pf_post_lopf']:
+            results_to_csv(network, args)
+        else:
+            results_to_csv(network, args, pf_solution=pf_solution)
 
-                if disaggregated_network:
-                    results_to_csv(
-                            disaggregated_network,
-                            {k: os.path.join(v, 'disaggregated')
-                            if k == 'csv_export' else v
-                            for k, v in args.items()})
+        if disaggregated_network:
+            results_to_csv(
+                    disaggregated_network,
+                    {k: os.path.join(v, 'disaggregated')
+                        if k == 'csv_export' else v
+                        for k, v in args.items()})
 
     # close session
     # session.close()
@@ -652,4 +618,4 @@ if __name__ == '__main__':
     # plot_stacked_gen(network, resolution="MW")
     # plot to show extendable storages
     # storage_distribution(network)
-    # extension_overlay_network(network)
+# extension_overlay_network(network)
