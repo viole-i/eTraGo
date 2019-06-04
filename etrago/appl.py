@@ -110,8 +110,8 @@ args = {
     'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
-    'start_snapshot': 1,
-    'end_snapshot': 240,
+    'start_snapshot': 499,
+    'end_snapshot': 506,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
                        'logFile': 'solver.log', 'threads':4, 'method':2, 'crossover':0},  # {} for default options
@@ -120,7 +120,7 @@ args = {
     'scn_extension': None,  # None or array of extension scenarios
     'scn_decommissioning': None,  # None or decommissioning scenario
     # Export options:
-    'lpfile': 'snapshottest3.lp',  # save pyomo's lp file: False or /path/tofolder
+    'lpfile': 'snapshottest.lp',  # save pyomo's lp file: False or /path/tofolder
     'csv_export': False,  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
@@ -130,8 +130,8 @@ args = {
     'ramp_limits': False,  # Choose if using ramp limit of generators
     'extra_functionality': None,  # Choose function name or None
     # Clustering:
-    'network_clustering_kmeans': 50,  # False or the value k for clustering
-    'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
+    'network_clustering_kmeans': 5,  # False or the value k for clustering
+    'load_cluster': 'cluster_coord_k_5_result',  # False or predefined busmap for k-means
     'network_clustering_ehv': False,   # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
     'snapshot_clustering': 4,  # False or the number of 'periods'
@@ -435,9 +435,11 @@ def etrago(args):
 
     # snapshot clustering
     if not args['snapshot_clustering'] is False:
+        home=os.path.expanduser('~')
+        resultspath=os.path.join(home, 'openego/snapshot_clustering')
         nsnap=[1,2]
         network, df_cluster = snapshot_clustering(
-            network,  how='daily', clusters=nsnap)
+            network, resultspath, how='daily', clusters=nsnap)
         extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint
 
     # load shedding in order to hunt infeasibilities
