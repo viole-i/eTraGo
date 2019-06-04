@@ -43,7 +43,7 @@ __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "Simon Hilpert"
 
 
-def snapshot_clustering(network, how='daily', clusters=[]):
+def snapshot_clustering(network, resultspath, how='daily', clusters=[]):
     """
     """
     
@@ -163,10 +163,10 @@ def run(network, path, write_results=False, n_clusters=None, how='daily',
         network.cluster=False
         path=os.path.join(path, 'original')
         
-    snapshots=network.snapshots
+        snapshots=network.snapshots
         
-    network_lopf(network, snapshots, extra_functionality=snapshots_cluster_constraints,
-                     solver_name='gurobi', solver_options=('BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0))
+        network_lopf(network, snapshots, extra_functionality=snapshots_cluster_constraints,
+                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0})
                
     if write_results:
         results_to_csv(network, path)
