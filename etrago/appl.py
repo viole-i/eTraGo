@@ -120,7 +120,7 @@ args = {
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
     'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035'],  # None or array of extension scenarios
-    'scn_decommissioning': 'nep2035_b2',  # None or decommissioning scenario
+    'scn_decommissioning': ['nep2035_b2'],  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
     'csv_export': False,  # save results as csv: False or /path/tofolder
@@ -459,9 +459,6 @@ def etrago(args):
                     end_snapshot=args['end_snapshot'])
         network = geolocation_buses(network, session)
 
-    # Add missing lines in Munich and Stuttgart
-    network = add_missing_components(network)
-
     # set Branch capacity factor for lines and transformer
     if args['branch_capacity_factor']:
         set_branch_capacity(network, args)
@@ -472,8 +469,13 @@ def etrago(args):
             network = decommissioning(
                     network,
                     session,
-                    args,
-                    args['scn_decommissioning'][i])
+                    version=args['gridversion'],
+                    scn_decommissioning=args['scn_decommissioning'][i],
+                    branch_capacity_factor=args['branch_capacity_factor'])
+
+    # Add missing lines in Munich and Stuttgart
+    network = add_missing_components(network)
+
 
     # investive optimization strategies
     if args['extendable'] != []:
