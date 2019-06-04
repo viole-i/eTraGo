@@ -107,7 +107,7 @@ if 'READTHEDOCS' not in os.environ:
 
 args = {
     # Setup and Configuration:
-    'db': 'local',  # database session
+    'db': 'oedb',  # database session
     'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
@@ -119,11 +119,11 @@ args = {
     'model_formulation': 'kirchhoff', # angles or kirchhoff
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
-    'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035'],  # None or array of extension scenarios
-    'scn_decommissioning': ['nep2035_b2'],  # None or decommissioning scenario
+    'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035', 'bugfix_wind_offshore', 'chp_nep'],  # None or array of extension scenarios
+    'scn_decommissioning': ['nep2035_b2', 'bugfix_pv_wind_nep'],  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'csv_export': False,  # save results as csv: False or /path/tofolder
+    'csv_export':'teste_export',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
     'extendable': ['network', 'storage'],  # Array of components to optimize
