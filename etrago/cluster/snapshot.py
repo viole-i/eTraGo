@@ -42,6 +42,7 @@ __copyright__ = ("Flensburg University of Applied Sciences, "
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "Simon Hilpert"
 
+write_results=True
 
 def snapshot_clustering(network, resultspath, how='daily', clusters=[]):
     """
