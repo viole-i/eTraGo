@@ -332,6 +332,8 @@ def busmap_by_shortest_path(network, session, scn_name, version, fromlvl,
     df.rename(columns={'source': 'bus0', 'target': 'bus1'}, inplace=True)
     df.set_index(['scn_name', 'bus0', 'bus1'], inplace=True)
 
+    df.to_csv('busmap_nep_windoffshore_chp.csv')
+
     for i, d in df.reset_index().iterrows():
         session.add(EgoGridPfHvBusmap(**d.to_dict()))
 
@@ -364,14 +366,18 @@ def busmap_from_psql(network, session, scn_name, version):
 
     def fetch():
 
-        query = session.query(EgoGridPfHvBusmap.bus0, EgoGridPfHvBusmap.bus1).\
+        if version:
+            query = session.query(EgoGridPfHvBusmap.bus0, EgoGridPfHvBusmap.bus1).\
             filter(EgoGridPfHvBusmap.scn_name == scn_name).filter(
                     EgoGridPfHvBusmap.version == version)
+        else:
+             query = session.query(EgoGridPfHvBusmap.bus0, EgoGridPfHvBusmap.bus1).\
+            filter(EgoGridPfHvBusmap.scn_name == scn_name).filter(
+                    EgoGridPfHvBusmap.version == 'NaN')
 
         return dict(query.all())
 
     busmap = fetch()
-
     # TODO: Or better try/except/finally
     if not busmap:
         print('Busmap does not exist and will be created.\n')
@@ -379,7 +385,7 @@ def busmap_from_psql(network, session, scn_name, version):
         cpu_cores = input('cpu_cores (default 4): ') or '4'
 
         busmap_by_shortest_path(network, session, scn_name, version,
-                                fromlvl=[110], tolvl=[220, 380, 400, 450],
+                                fromlvl=[110], tolvl=[220,320, 380, 400, 450],
                                 cpu_cores=int(cpu_cores))
         busmap = fetch()
 
