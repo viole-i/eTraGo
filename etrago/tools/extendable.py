@@ -275,6 +275,40 @@ def extendable(network, args, line_max):
                 'marginal_cost'] = network.storage_units.loc[(
                 network.storage_units.carrier == 'extendable_storage') &
                 (network.storage_units.max_hours == 168),'marginal_cost'].max()
+        
+        
+    if 'osm_network' in args['extendable']:
+        network.lines.s_nom_extendable[network.lines.scn_name== args['scn_name']] = True
+        network.lines.s_nom_min[network.lines.scn_name== args['scn_name']] = network.lines.s_nom[network.lines.scn_name== args['scn_name']]
+
+        if not line_max==None:
+            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = line_max * network.lines.s_nom[network.lines.scn_name== args['scn_name']]
+        else:
+            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = float("inf")
+
+        if not network.transformers.empty:
+            network.transformers.s_nom_extendable[network.transformers.scn_name== args['scn_name']] = True
+            network.transformers.s_nom_min[network.transformers.scn_name== args['scn_name']] = network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
+            if not line_max==None:
+                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] =\
+                line_max * network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
+
+            else:
+                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] = float("inf")
+
+        if not network.links.empty:
+            network.links.p_nom_extendable[network.links.scn_name== args['scn_name']] = True
+            network.links.p_nom_min[network.links.scn_name== args['scn_name']] = network.links.p_nom[network.links.scn_name== args['scn_name']]
+            network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
+            if not line_max==None:
+                network.links.p_nom_max[network.links.scn_name== args['scn_name']]=\
+                line_max * network.links.p_nom[network.links.scn_name== args['scn_name']]
+                
+        else:
+                network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
+
+        network = set_line_costs(network, args)
+        network = set_trafo_costs(network, args)
 
 
     # Extension settings for extension-NEP 2035 scenarios
