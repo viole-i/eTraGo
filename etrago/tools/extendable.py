@@ -279,32 +279,44 @@ def extendable(network, args, line_max):
         
     if 'osm_network' in args['extendable']:
         network.lines.s_nom_extendable[network.lines.scn_name== args['scn_name']] = True
-        network.lines.s_nom_min[network.lines.scn_name== args['scn_name']] = network.lines.s_nom[network.lines.scn_name== args['scn_name']]
+        network.lines.s_nom_min[network.lines.scn_name== args['scn_name']]\
+        = network.lines.s_nom[network.lines.scn_name== args['scn_name']]
 
         if not line_max==None:
-            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = line_max * network.lines.s_nom[network.lines.scn_name== args['scn_name']]
+            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] \
+            = line_max * network.lines.s_nom[
+                    network.lines.scn_name== args['scn_name']]
         else:
-            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = float("inf")
+            network.lines.s_nom_max[
+                    network.lines.scn_name== args['scn_name']] = float("inf")
 
         if not network.transformers.empty:
-            network.transformers.s_nom_extendable[network.transformers.scn_name== args['scn_name']] = True
-            network.transformers.s_nom_min[network.transformers.scn_name== args['scn_name']] = network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
+            network.transformers.s_nom_extendable[
+                    network.transformers.scn_name== args['scn_name']] = True
+            network.transformers.s_nom_min[
+                    network.transformers.scn_name== args['scn_name']]\
+                    = network.transformers.s_nom[
+                            network.transformers.scn_name== args['scn_name']]
             if not line_max==None:
-                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] =\
-                line_max * network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
+                network.transformers.s_nom_max[
+                        network.transformers.scn_name== args['scn_name']] =\
+                line_max * network.transformers.s_nom[
+                        network.transformers.scn_name== args['scn_name']]
 
             else:
-                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] = float("inf")
+                network.transformers.s_nom_max[
+                        network.transformers.scn_name== args['scn_name']] = float("inf")
 
         if not network.links.empty:
             network.links.p_nom_extendable[network.links.scn_name== args['scn_name']] = True
-            network.links.p_nom_min[network.links.scn_name== args['scn_name']] = network.links.p_nom[network.links.scn_name== args['scn_name']]
+            network.links.p_nom_min[network.links.scn_name== args['scn_name']] = \
+            network.links.p_nom[network.links.scn_name== args['scn_name']]
             network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
             if not line_max==None:
                 network.links.p_nom_max[network.links.scn_name== args['scn_name']]=\
                 line_max * network.links.p_nom[network.links.scn_name== args['scn_name']]
                 
-        else:
+            else:
                 network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
 
         network = set_line_costs(network, args)
@@ -336,58 +348,28 @@ def extendable(network, args, line_max):
                 
             network.lines.loc[network.lines.scn_name == (
             'extension_' + args['scn_extension'][i]
-            ), 's_nom_max'] = network.lines.s_nom[network.lines.scn_name == (
+            ), 's_nom_max'] =line_max * network.lines.s_nom[network.lines.scn_name == (
             'extension_' + args['scn_extension'][i])]
                 
             network.links.loc[network.links.scn_name == (
             'extension_' + args['scn_extension'][i]
             ), 'p_nom_extendable'] = True
                 
+            network.links.loc[network.links.scn_name == (
+            'extension_' + args['scn_extension'][i]
+            ), 'p_nom_max'] =line_max * network.links.p_nom[network.links.scn_name == (
+            'extension_' + args['scn_extension'][i])]
+                
             network.transformers.loc[network.transformers.scn_name == (
             'extension_' + args['scn_extension'][i]
             ), 's_nom_extendable'] = True
                 
+                
             network.lines.loc[network.lines.scn_name == (
             'extension_' + args['scn_extension'][i]
-            ), 'capital_cost'] = network.lines.capital_cost/\
+            ), 'capital_cost'] = network.lines[network.lines.scn_name == (
+            'extension_' + args['scn_extension'][i])].capital_cost/\
                 args['branch_capacity_factor']['eHV']
-
-            network.lines.s_nom_max[network.lines.scn_name== args['scn_extension'][i]] = line_max * network.lines.s_nom[network.lines.scn_name== args['scn_extension'][i]]
-
-    if 'osm_network' in args['extendable']:
-        network.lines.s_nom_extendable[network.lines.scn_name== args['scn_name']] = True
-        network.lines.s_nom_min[network.lines.scn_name== args['scn_name']] = network.lines.s_nom[network.lines.scn_name== args['scn_name']]
-        
-        if not line_max==None:
-            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = line_max * network.lines.s_nom[network.lines.scn_name== args['scn_name']]
-        
-        else:
-            network.lines.s_nom_max[network.lines.scn_name== args['scn_name']] = float("inf")
-
-        if not network.transformers.empty:
-            network.transformers.s_nom_extendable[network.transformers.scn_name== args['scn_name']] = True
-            network.transformers.s_nom_min[network.transformers.scn_name== args['scn_name']] = network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
-
-            if not line_max==None:
-                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] =\
-                line_max * network.transformers.s_nom[network.transformers.scn_name== args['scn_name']]
-                
-            else:
-                network.transformers.s_nom_max[network.transformers.scn_name== args['scn_name']] = float("inf")
-
-        if not network.links.empty:
-            network.links.p_nom_extendable[network.links.scn_name== args['scn_name']] = True
-            network.links.p_nom_min[network.links.scn_name== args['scn_name']] = network.links.p_nom[network.links.scn_name== args['scn_name']]
-            network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
-            if not line_max==None:
-                network.links.p_nom_max[network.links.scn_name== args['scn_name']]=\
-                line_max * network.links.p_nom[network.links.scn_name== args['scn_name']]
-                
-            else:
-                network.links.p_nom_max[network.links.scn_name== args['scn_name']] = float("inf")
-
-        network = set_line_costs(network, args)
-        network = set_trafo_costs(network, args)   
 
     if 'overlay_lines' in args['extendable']:
         for i in range(len(args['scn_extension'])):
