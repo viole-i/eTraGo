@@ -32,6 +32,8 @@ Remaining questions/tasks:
 
 import pandas as pd
 import os
+from etrago.tools.utilities import results_to_csv
+
 if 'READTHEDOCS' not in os.environ:
     import pyomo.environ as po
     import tsam.timeseriesaggregation as tsam
@@ -44,17 +46,19 @@ __author__ = "Simon Hilpert"
 
 write_results=True
 
-def snapshot_clustering(network, resultspath, how='daily', clusters=[]):
+def snapshot_clustering(network, args, resultspath, how='daily', clusters=[]):
     """
     """
     
     # original problem
-    run(network=network.copy(), path=resultspath, write_results=write_results, n_clusters=None,
+    network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
                   how=how, normed=False)
+    
+    network_original=network.copy()
     
     for c in clusters:
         path=os.path.join(resultspath, how)
-        run(network=network.copy(), path=path, write_results=write_results, n_clusters=c, 
+        network, df_cluster=run(network=network_original.copy(), args=args, path=path, write_results=write_results, n_clusters=c, 
             how=how, normed=False)
 
     return network, df_cluster
@@ -142,7 +146,7 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
              
     return df_cluster, cluster_weights, dates, hours
 
-def run(network, path, write_results=False, n_clusters=None, how='daily',
+def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         normed=False):
     """
     """
@@ -151,26 +155,29 @@ def run(network, path, write_results=False, n_clusters=None, how='daily',
         path=os.path.join(path, str(n_clusters))
         
         # reduce storage costs due to clusters
-        network.cluster = True
+        # network.cluster = True
 
         # calculate clusters
         df_cluster, cluster_weights, dates, hours = tsam_cluster(prepare_pypsa_timeseries(network),
                            typical_periods=n_clusters,
                            how='daily')       
         network.cluster = df_cluster
-        update_data_frames(network, cluster_weights, dates, hours)   
+        update_data_frames(network, cluster_weights, dates, hours)
+        
+        network.lopf(network.snapshots, extra_functionality=snapshot_cluster_constraints,
+                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0})
         
     else:
-        network.cluster=False
         path=os.path.join(path, 'original')
         
-        snapshots=network.snapshots
+        # network.cluster=False
         
-        network_lopf(network, snapshots, extra_functionality=snapshots_cluster_constraints,
+        network.lopf(network.snapshots, extra_functionality=None,
                      solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0})
-               
+        df_cluster=None
+           
     if write_results:
-        results_to_csv(network, path)
+        results_to_csv(network, path, args, pf_solution=None)
         write_lpfile(network, path=os.path.join(path, 'file.lp'))
     
     return network, df_cluster
@@ -215,6 +222,7 @@ def update_data_frames(network, cluster_weights, dates, hours):
     network
 
     """
+    
     network.snapshot_weightings = network.snapshot_weightings.loc[dates]
     network.snapshots = network.snapshot_weightings.index
 
