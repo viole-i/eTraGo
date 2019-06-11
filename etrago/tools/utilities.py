@@ -609,7 +609,7 @@ def _enumerate_row(row):
     return row
 
 
-def results_to_csv(network, args, pf_solution=None):
+def results_to_csv(network, path, args, pf_solution=None):
     """ Function the writes the calaculation results
     in csv-files in the desired directory. 
 
@@ -623,8 +623,6 @@ def results_to_csv(network, args, pf_solution=None):
         If pf was calculated, df containing information of convergence else None. 
 
     """
-
-    path = args['csv_export']
 
     if path == False:
         return None
