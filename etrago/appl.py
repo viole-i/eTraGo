@@ -110,8 +110,8 @@ args = {
     'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
-    'start_snapshot': 499,
-    'end_snapshot': 506,
+    'start_snapshot': 1,
+    'end_snapshot': 240,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
                        'logFile': 'solver.log', 'threads':4, 'method':2, 'crossover':0},  # {} for default options
@@ -124,14 +124,14 @@ args = {
     'csv_export': False,  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
-    'extendable': ['storage'],  # Array of components to optimize
+    'extendable': ['network','storage'],  # Array of components to optimize
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False,  # Choose if using ramp limit of generators
     'extra_functionality': None,  # Choose function name or None
     # Clustering:
-    'network_clustering_kmeans': 5,  # False or the value k for clustering
-    'load_cluster': 'cluster_coord_k_5_result',  # False or predefined busmap for k-means
+    'network_clustering_kmeans': 50,  # False or the value k for clustering
+    'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
     'network_clustering_ehv': False,   # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
     'snapshot_clustering': 4,  # False or the number of 'periods'
@@ -426,27 +426,8 @@ def etrago(args):
                     line_max=4)
         network = convert_capital_costs(
             network, args['start_snapshot'], args['end_snapshot'])
-
-    # skip snapshots
-    if args['skip_snapshots']:
-        network.snapshots = network.snapshots[::args['skip_snapshots']]
-        network.snapshot_weightings = network.snapshot_weightings[
-            ::args['skip_snapshots']] * args['skip_snapshots']
-
-    # snapshot clustering
-    if not args['snapshot_clustering'] is False:
-        home=os.path.expanduser('~')
-        resultspath=os.path.join(home, 'openego/snapshot_clustering')
-        nsnap=[1,2]
-        network, df_cluster = snapshot_clustering(
-            network, resultspath, how='daily', clusters=nsnap)
-        extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint
-
-    # load shedding in order to hunt infeasibilities
-    if args['load_shedding']:
-        load_shedding(network)
-
-    # ehv network clustering
+        
+     # ehv network clustering
     if args['network_clustering_ehv']:
         network.generators.control = "PV"
         busmap = busmap_from_psql(
@@ -458,7 +439,7 @@ def etrago(args):
                                 args['scn_extension'])))
         network = cluster_on_extra_high_voltage(
             network, busmap, with_time=True)
-
+    
     # k-mean clustering
     if not args['network_clustering_kmeans'] == False:
         clustering = kmean_clustering(
@@ -480,6 +461,24 @@ def etrago(args):
         if extra_functionality == snapshot_cluster_constraints:
             network.cluster=df_cluster
             
+    # load shedding in order to hunt infeasibilities
+    if args['load_shedding']:
+        load_shedding(network)
+
+    # skip snapshots
+    if args['skip_snapshots']:
+        network.snapshots = network.snapshots[::args['skip_snapshots']]
+        network.snapshot_weightings = network.snapshot_weightings[
+            ::args['skip_snapshots']] * args['skip_snapshots']
+
+    # snapshot clustering
+    if not args['snapshot_clustering'] is False:
+        home=os.path.expanduser('/home/kathiesterl/000')
+        resultspath=os.path.join(home, 'Beispielrechnung')
+        nsnap=[1,2,3,4]
+        network, df_cluster = snapshot_clustering(
+            network, args, resultspath, how='daily', clusters=nsnap)
+        extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint      
 
     if args['ramp_limits']:
         ramp_limits(network)
