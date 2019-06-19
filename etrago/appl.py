@@ -107,12 +107,12 @@ if 'READTHEDOCS' not in os.environ:
 
 args = {
     # Setup and Configuration:
-    'db': 'local',  # database session
+    'db': 'oedb_clara',  # database session
     'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 2,
+    'end_snapshot': 5,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,'method':2, 'crossover':0,
                        'logFile': 'nep_solver.log', 'threads':4},  # {} for default options
@@ -122,19 +122,19 @@ args = {
     'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035', 'bugfix_wind_offshore', 'chp_nep'],  # None or array of extension scenarios
     'scn_decommissioning':['nep2035_b2', 'bugfix_pv_wind_nep'],  # None or decommissioning scenario
     # Export options:
-    'lpfile': 'lp.lp',  # save pyomo's lp file: False or /path/tofolder
-    'csv_export':'nep_ohne_nb',  # save results as csv: False or /path/tofolder
+    'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
+    'csv_export':'test',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
-    'extendable': ['osm_network', 'storage', 'overlay_network'],  # Array of components to optimize
+    'extendable': ['german_network_osm'],  # Array of components to optimize
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False,  # Choose if using ramp limit of generators
     'extra_functionality': {},  # Choose function name or None
     # Clustering:
-    'network_clustering_kmeans': 50,  # False or the value k for clustering
-    'load_cluster':False, #'cluster_coord_k_50_result', # 'load_cluster_nep_500',  # False or predefined busmap for k-means
-    'network_clustering_ehv':False,  # clustering of HV buses to EHV buses.
+    'network_clustering_kmeans': 300,  # False or the value k for clustering
+    'load_cluster':'cluster_coord_k_300_result', # 'load_cluster_nep_500',  # False or predefined busmap for k-means
+    'network_clustering_ehv':True,  # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
     'snapshot_clustering': False,  # False or the number of 'periods'
     # Simplifications:
@@ -415,10 +415,10 @@ def etrago(args):
     network.storage_units.cyclic_state_of_charge = True
 
     # set extra_functionality
-    if args['extra_functionality'] is not None:
+    """if args['extra_functionality'] is not None:
         extra_functionality = eval(args['extra_functionality'])
     elif args['extra_functionality'] is None:
-        extra_functionality = args['extra_functionality']
+        extra_functionality = args['extra_functionality']"""
         
     # set disaggregated_network to default
     disaggregated_network = None
@@ -483,8 +483,8 @@ def etrago(args):
                     network,
                     args,
                     line_max=4)
-        """network = convert_capital_costs(
-            network, args['start_snapshot'], args['end_snapshot'])"""
+        network = convert_capital_costs(
+            network, args['start_snapshot'], args['end_snapshot'])
 
     # skip snapshots
     if args['skip_snapshots']:
@@ -560,7 +560,7 @@ def etrago(args):
         iterate_lopf(network,
                      args,
                      Constraints(args).functionality,
-                     method={'n_iter':4})
+                     method={'n_iter_fixed':5})
 
     # start non-linear powerflow simulation
     elif args['method'] == 'pf':

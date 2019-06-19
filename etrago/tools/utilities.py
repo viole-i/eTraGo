@@ -1105,7 +1105,7 @@ def group_parallel_lines(network):
 
 
 def set_line_costs(network, args, 
-                   cost110=230, cost220=290, cost380=85, costDC=375):
+                   cost110=4*230, cost220=4*290, cost380=4*85, costDC=375):
     """ Set capital costs for extendable lines in respect to PyPSA [€/MVA]
     
     Parameters
@@ -1130,19 +1130,19 @@ def set_line_costs(network, args,
     """
     network.lines["v_nom"] = network.lines.bus0.map(network.buses.v_nom)
 
-    network.lines.loc[((network.lines.v_nom == 110)),#& network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 110)& (network.lines.capital_cost.isnull())),
                       'capital_cost'] = cost110 * network.lines.length /\
                           args['branch_capacity_factor']['HV']
                       
-    network.lines.loc[((network.lines.v_nom == 220)), #& network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 220) & (network.lines.capital_cost.isnull())),
                       'capital_cost'] = cost220 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.lines.loc[((network.lines.v_nom == 380)),#& network.lines.capital_cost.isnull()),
+    network.lines.loc[((network.lines.v_nom == 380) & (network.lines.capital_cost.isnull())),
                       'capital_cost'] = cost380 * network.lines.length/\
                       args['branch_capacity_factor']['eHV']
                       
-    network.links.loc[(network.links.p_nom_extendable),# & network.links.capital_cost.isnull()),
+    network.links.loc[((network.links.p_nom_extendable) & (network.links.capital_cost.isnull())),
                       'capital_cost'] = costDC * network.links.length
 
     return network
@@ -1845,6 +1845,34 @@ def iterate_lopf(network, args, extra_functionality, method={'n_iter':4},
                 network.links.p_nom_max=\
                  (max_ext_link-(n_iter-i)*delta_s_max)*network.links.p_nom
             
+                network.lopf(
+                    network.snapshots,
+                    solver_name=args['solver'],
+                    solver_options=args['solver_options'],
+                    extra_functionality=extra_functionality,
+                    formulation=args['model_formulation'])
+                y = time.time()
+                z = (y - x) / 60
+
+                if network.results["Solver"][0]["Status"].key!='ok':
+                    raise  Exception('LOPF '+ str(i) + ' not solved.')
+
+                print("Time for LOPF [min]:", round(z, 2))
+                if args['csv_export'] != False:
+                    path=args['csv_export'] + '/lopf_iteration_'+ str(i)
+                    results_to_csv(network, args, path)
+
+                if i < n_iter:
+                    l_snom_pre, t_snom_pre = \
+                    update_electrical_parameters(network, 
+                                                 l_snom_pre, t_snom_pre)
+                    
+        if 'n_iter_fixed' in method:
+            n_iter = method['n_iter_fixed']
+
+            for i in range (1,(1+n_iter)):
+                x = time.time()
+
                 network.lopf(
                     network.snapshots,
                     solver_name=args['solver'],
