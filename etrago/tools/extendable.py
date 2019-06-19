@@ -161,6 +161,73 @@ def extendable(network, args, line_max):
             
         network = set_line_costs(network, args)
         network = set_trafo_costs(network, args)
+        
+    if 'german_network_osm' in args['extendable']:
+        buses = network.buses[~network.buses.index.isin(
+                buses_by_country(network).index)]
+                    
+        buses = buses[buses.scn_name == args['scn_name']]
+        
+        network.lines.loc[(network.lines.bus0.isin(buses.index)) &
+                          (network.lines.bus1.isin(buses.index)),
+                          's_nom_extendable'] = True
+        network.lines.loc[(network.lines.bus0.isin(buses.index)) &
+                          (network.lines.bus1.isin(buses.index)),
+                          's_nom_min'] = network.lines.s_nom[(network.lines.bus0.isin(buses.index)) &
+                          (network.lines.bus1.isin(buses.index))]
+        network.lines.loc[(network.lines.bus0.isin(buses.index)) &
+                          (network.lines.bus1.isin(buses.index)),
+                          's_nom_max'] = float("inf")
+        
+        if not line_max==None:
+            network.lines.loc[(network.lines.bus0.isin(buses.index)) &
+                    (network.lines.bus1.isin(buses.index)),
+                    's_nom_max'] = line_max * network.lines.s_nom[(network.lines.bus0.isin(buses.index)) &
+                    (network.lines.bus1.isin(buses.index))]
+        
+        else:
+            network.lines.loc[(network.lines.bus0.isin(buses.index)) &
+                    (network.lines.bus1.isin(buses.index)),
+                    's_nom_max'] = float("inf")
+
+        if not network.transformers.empty:
+            network.transformers.loc[network.transformers.bus0.isin(
+                    buses.index),'s_nom_extendable'] = True
+            network.transformers.loc[network.transformers.bus0.isin(
+                    buses.index),'s_nom_min'] = network.transformers.s_nom[network.transformers.bus0.isin(buses.index)]
+                
+            if not line_max==None:
+                network.transformers.loc[network.transformers.bus0.isin(
+                    buses.index),'s_nom_max'] = \
+                line_max * network.transformers.s_nom[network.transformers.bus0.isin(buses.index)]
+                
+            else:
+                network.transformers.loc[network.transformers.bus0.isin(
+                    buses.index),'s_nom_max'] = float("inf")
+
+        if not network.links.empty:
+            network.links.loc[(network.links.bus0.isin(buses.index)) &
+                              (network.links.bus1.isin(buses.index)),
+                              'p_nom_extendable'] = True
+            network.links.loc[(network.links.bus0.isin(buses.index)) &
+                              (network.links.bus1.isin(buses.index)),
+                          'p_nom_min'] = network.links.p_nom[(network.links.bus0.isin(buses.index)) &
+                              (network.links.bus1.isin(buses.index))]
+
+            if not line_max==None:
+                network.links.loc[(network.links.bus0.isin(buses.index)) &
+                        (network.links.bus1.isin(buses.index)),
+                          'p_nom_max'] = line_max * network.links.p_nom[(network.links.bus0.isin(buses.index)) &
+                              (network.links.bus1.isin(buses.index))]
+                
+            else:
+                network.links.loc[(network.links.bus0.isin(buses.index)) &
+                        (network.links.bus1.isin(buses.index)),
+                          'p_nom_max'] = float("inf")
+            
+        network = set_line_costs(network, args)
+        network = set_trafo_costs(network, args)
+
 
     if 'foreign_network' in args['extendable']:
         buses = network.buses[network.buses.index.isin(
@@ -342,6 +409,7 @@ def extendable(network, args, line_max):
 
     if 'overlay_network' in args['extendable']:
         for i in range(len(args['scn_extension'])):
+
             network.lines.loc[network.lines.scn_name == (
             'extension_' + args['scn_extension'][i]
             ), 's_nom_extendable'] = True
@@ -363,7 +431,11 @@ def extendable(network, args, line_max):
             network.transformers.loc[network.transformers.scn_name == (
             'extension_' + args['scn_extension'][i]
             ), 's_nom_extendable'] = True
-                
+            
+            network.transformers.loc[network.transformers.scn_name == (
+            'extension_' + args['scn_extension'][i]
+            ), 's_nom_max'] =line_max * network.transformers.s_nom[network.transformers.scn_name == (
+            'extension_' + args['scn_extension'][i])]
                 
             network.lines.loc[network.lines.scn_name == (
             'extension_' + args['scn_extension'][i]

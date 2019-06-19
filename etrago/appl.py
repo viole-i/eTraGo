@@ -107,12 +107,12 @@ if 'READTHEDOCS' not in os.environ:
 
 args = {
     # Setup and Configuration:
-    'db': 'oedb_clara',  # database session
+    'db': 'local',  # database session
     'gridversion': None,  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 8,
+    'end_snapshot': 2,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,'method':2, 'crossover':0,
                        'logFile': 'nep_solver.log', 'threads':4},  # {} for default options
@@ -132,9 +132,9 @@ args = {
     'ramp_limits': False,  # Choose if using ramp limit of generators
     'extra_functionality': {},  # Choose function name or None
     # Clustering:
-    'network_clustering_kmeans': 300,  # False or the value k for clustering
+    'network_clustering_kmeans': 50,  # False or the value k for clustering
     'load_cluster':False, #'cluster_coord_k_50_result', # 'load_cluster_nep_500',  # False or predefined busmap for k-means
-    'network_clustering_ehv': True,  # clustering of HV buses to EHV buses.
+    'network_clustering_ehv':False,  # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
     'snapshot_clustering': False,  # False or the number of 'periods'
     # Simplifications:
@@ -415,10 +415,10 @@ def etrago(args):
     network.storage_units.cyclic_state_of_charge = True
 
     # set extra_functionality
-    """if args['extra_functionality'] is not None:
+    if args['extra_functionality'] is not None:
         extra_functionality = eval(args['extra_functionality'])
     elif args['extra_functionality'] is None:
-        extra_functionality = args['extra_functionality']"""
+        extra_functionality = args['extra_functionality']
         
     # set disaggregated_network to default
     disaggregated_network = None
@@ -483,8 +483,8 @@ def etrago(args):
                     network,
                     args,
                     line_max=4)
-        network = convert_capital_costs(
-            network, args['start_snapshot'], args['end_snapshot'])
+        """network = convert_capital_costs(
+            network, args['start_snapshot'], args['end_snapshot'])"""
 
     # skip snapshots
     if args['skip_snapshots']:
