@@ -112,18 +112,18 @@ args = {
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 5,
+    'end_snapshot': 8760,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,'method':2, 'crossover':0,
-                       'logFile': 'nep_solver.log', 'threads':4},  # {} for default options
+                       'logFile': 'nep_solver2506.log', 'threads':4},  # {} for default options
     'model_formulation': 'kirchhoff', # angles or kirchhoff
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
-    'scn_extension':['nep2035_b2', 'BE_NO_NEP 2035', 'bugfix_wind_offshore', 'chp_nep'],  # None or array of extension scenarios
+    'scn_extension':  ['nep2035_b2', 'BE_NO_NEP 2035', 'bugfix_wind_offshore', 'chp_nep'],  # None or array of extension scenarios
     'scn_decommissioning':['nep2035_b2', 'bugfix_pv_wind_nep'],  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'csv_export':'test',  # save results as csv: False or /path/tofolder
+    'csv_export':'nep_250619',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
     'extendable': ['german_network_osm'],  # Array of components to optimize
@@ -133,13 +133,13 @@ args = {
     'extra_functionality': {},  # Choose function name or None
     # Clustering:
     'network_clustering_kmeans': 300,  # False or the value k for clustering
-    'load_cluster':'cluster_coord_k_300_result', # 'load_cluster_nep_500',  # False or predefined busmap for k-means
-    'network_clustering_ehv':True,  # clustering of HV buses to EHV buses.
+    'load_cluster':False, # 'load_cluster_nep_500',  # False or predefined busmap for k-means
+    'network_clustering_ehv':False,  # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
     'snapshot_clustering': False,  # False or the number of 'periods'
     # Simplifications:
     'parallelisation': False,  # run snapshots parallely.
-    'skip_snapshots': False,
+    'skip_snapshots': 5,
     'line_grouping': False,  # group lines parallel lines
     'branch_capacity_factor': {'HV': 0.5, 'eHV': 0.7},  # p.u. branch derating
     'load_shedding': False,  # meet the demand at value of loss load cost

@@ -167,7 +167,21 @@ def extendable(network, args, line_max):
                 buses_by_country(network).index)]
                     
         #buses = buses[buses.scn_name == args['scn_name']]
-        
+                    # calculate the cables of the route between two buses
+        cables = network.lines.groupby(["bus0", "bus1"]).cables.sum()
+        cables2 = network.lines.groupby(["bus1", "bus0"]).cables.sum()
+        doubles_idx = cables.index == cables2.index
+        cables3 = cables[doubles_idx]+cables2[doubles_idx]
+        cables4 = cables3.swaplevel()
+        cables[cables3.index] = cables3
+        cables[cables4.index] = cables4
+        network.lines["total_cables"] = network.lines.apply(lambda x: cables[(x.bus0, x.bus1)], axis=1) 
+        s_nom_max_110 = 4*2*1.02*110*(3)**0.5 * (network.lines["cables"]/network.lines["total_cables"])
+        s_nom_max_220 = 4*4*1.02*220*(3)**0.5 \
+                          * (network.lines["cables"]/network.lines["total_cables"])
+        s_nom_max_380 = 4*4*1.02*380*(3)**0.5  \
+                          * (network.lines["cables"]/network.lines["total_cables"])
+        # set the s_nom_max depending on the voltage level and the share of the route
         network.lines.loc[(network.lines.bus0.isin(buses.index)) &
                           (network.lines.bus1.isin(buses.index)),
                           's_nom_extendable'] = True
@@ -182,17 +196,17 @@ def extendable(network, args, line_max):
         # 380kV: 4x4x550AL1/70ST1A
         network.lines.loc[(network.lines.bus0.isin(buses.index)) &
                     (network.lines.bus1.isin(buses.index)) & (network.lines.v_nom >220),
-                    's_nom_max'] = 4*4*1.02*380*(3)**0.5 
+                    's_nom_max'] = s_nom_max_380
                           
         # 220kV: 4x4x550AL1/70ST1A
         network.lines.loc[(network.lines.bus0.isin(buses.index)) &
-                    (network.lines.bus1.isin(buses.index)) & (network.lines.v_nom >110),
-                    's_nom_max'] = 4*4*1.02*220*(3)**0.5
+                    (network.lines.bus1.isin(buses.index)) & (network.lines.v_nom ==220),
+                    's_nom_max'] = s_nom_max_220
                           
         # 110kV: 4x2x550AL1/70ST1A
         network.lines.loc[(network.lines.bus0.isin(buses.index)) &
                     (network.lines.bus1.isin(buses.index)) & (network.lines.v_nom ==110),
-                    's_nom_max'] = 4*2*1.02*110*(3)**0.5
+                    's_nom_max'] =  s_nom_max_110 
                           
         
         
