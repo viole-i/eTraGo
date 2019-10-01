@@ -22,7 +22,7 @@ benchmark_time={}
 benchmark_objective={}
 ks=[]
 
-home = os.path.expanduser('/home/kathiesterl/000')
+home = os.path.expanduser('/home/clara/000')
 
 #receive information from the results of the calculation 
 for i in kmean:

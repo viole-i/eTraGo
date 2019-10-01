@@ -106,12 +106,12 @@ if 'READTHEDOCS' not in os.environ:
 
 args = {
     # Setup and Configuration:
-    'db': 'oedb_clara',  # database session
-    'gridversion': None,  # None for model_draft or Version number
+    'db': 'oedb',  # database session
+    'gridversion': 'v0.4.6',  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 240,
+    'end_snapshot': 72,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
                        'logFile': 'solver.log', 'threads':4, 'method':2, 'crossover':0},  # {} for default options
@@ -120,21 +120,21 @@ args = {
     'scn_extension': None,  # None or array of extension scenarios
     'scn_decommissioning': None,  # None or decommissioning scenario
     # Export options:
-    'lpfile': 'snapshottest.lp',  # save pyomo's lp file: False or /path/tofolder
+    'lpfile': 'snapshot_test.lp',  # save pyomo's lp file: False or /path/tofolder
     'csv_export': False,  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
-    'extendable': ['network','storage'],  # Array of components to optimize
+    'extendable': ['network'],  # Array of components to optimize
     'generator_noise': 789456,  # apply generator noise, False or seed number
     'minimize_loading': False,
     'ramp_limits': False,  # Choose if using ramp limit of generators
     'extra_functionality': None,  # Choose function name or None
     # Clustering:
-    'network_clustering_kmeans': 50,  # False or the value k for clustering
-    'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
+    'network_clustering_kmeans':5,  # False or the value k for clustering
+    'load_cluster': 'cluster_coord_k_5_result',  # False or predefined busmap for k-means
     'network_clustering_ehv': False,   # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
-    'snapshot_clustering': 4,  # False or the number of 'periods'
+    'snapshot_clustering': True,  # False or the number of 'periods'
     # Simplifications:
     'parallelisation': False,  # run snapshots parallely.
     'skip_snapshots': False,
@@ -473,13 +473,22 @@ def etrago(args):
 
     # snapshot clustering
     if not args['snapshot_clustering'] is False:
-        home=os.path.expanduser('/home/kathiesterl/000')
+        network.storage_units.efficiency_dispatch = 1
+        network.storage_units.efficiency_store = 1
+        network.storage_units.standing_loss = 0
+        home=os.path.expanduser('/home/clara/000')
         resultspath=os.path.join(home, 'Beispielrechnung')
-        nsnap=[1,2,3,4]
+        nsnap=[3]
         network, df_cluster = snapshot_clustering(
             network, args, resultspath, how='daily', clusters=nsnap)
         extra_functionality = snapshot_cluster_constraints  # daily_bounds or other constraint      
-
+        network.storage_units_t['soc_intra'] = pd.DataFrame(
+                index = network.snapshots.values, columns = network.storage_units.index)
+        d = network.model.state_of_charge_intra.extract_values()
+        for k in d.keys():
+            network.storage_units_t['soc_intra'][k[0]][k[1]] = d[k]
+        inter = network.model.state_of_charge_inter.extract_values() 
+        
     if args['ramp_limits']:
         ramp_limits(network)
 
@@ -501,11 +510,14 @@ def etrago(args):
     # start linear optimal powerflow calculations
     elif args['method'] == 'lopf':
         x = time.time()
+        """network.storage_units.efficiency_dispatch = 1
+        network.storage_units.efficiency_store = 1
+        network.storage_units.standing_loss = 0
         network.lopf(
             network.snapshots,
             solver_name=args['solver'],
             solver_options=args['solver_options'],
-            extra_functionality=extra_functionality, formulation="angles")
+            extra_functionality=extra_functionality, formulation="angles")"""
         y = time.time()
         z = (y - x) / 60
         # z is time for lopf in minutes

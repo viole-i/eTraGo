@@ -37,6 +37,7 @@ from etrago.tools.utilities import results_to_csv
 if 'READTHEDOCS' not in os.environ:
     import pyomo.environ as po
     import tsam.timeseriesaggregation as tsam
+    import datetime
 
 __copyright__ = ("Flensburg University of Applied Sciences, "
                  "Europa-Universität Flensburg, "
@@ -51,8 +52,8 @@ def snapshot_clustering(network, args, resultspath, how='daily', clusters=[]):
     """
     
     # original problem
-    network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
-                  how=how, normed=False)
+    #network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
+            #      how=how, normed=False)
     
     network_original=network.copy()
     
@@ -143,7 +144,7 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
     df_i_h = pd.DataFrame({'Timeseries': timeseries_df.index, 
                         'Candidate_day': nr_day}) 
     df_i_h.set_index('Timeseries',inplace=True)
-             
+            
     return df_cluster, cluster_weights, dates, hours
 
 def run(network, args, path, write_results=False, n_clusters=None, how='daily',
@@ -162,10 +163,11 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
                            typical_periods=n_clusters,
                            how='daily')       
         network.cluster = df_cluster
+        #import pdb; pdb.set_trace()
         update_data_frames(network, cluster_weights, dates, hours)
         
         network.lopf(network.snapshots, extra_functionality=snapshot_cluster_constraints,
-                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0})
+                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0}, formulation = 'kirchhoff')
         
     else:
         path=os.path.join(path, 'original')
@@ -173,7 +175,7 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         # network.cluster=False
         
         network.lopf(network.snapshots, extra_functionality=None,
-                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0})
+                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0}, formulation = 'kirchhoff')
         df_cluster=None
            
     if write_results:
@@ -260,10 +262,6 @@ def snapshot_cluster_constraints(network, snapshots):
     network.model.storages = sus.index
     
     if True:
-    # TODO: replace condition by somthing like:
-    # if network.cluster['intertemporal']: ?
-        # somewhere get 1...365, e.g in network.cluster['candidates']
-        # should be array-like DONE
         candidates = network.cluster.index.get_values()
 
         # create set for inter-temp constraints and variables
@@ -272,8 +270,8 @@ def snapshot_cluster_constraints(network, snapshots):
 
         # create intra soc variable for each storage and each hour
         network.model.state_of_charge_intra = po.Var(
-            sus.index, network.snapshots,
-            within=po.NonNegativeReals) 
+            sus.index, network.snapshots)#,
+           # within=po.NonNegativeReals) 
         
         def intra_soc_rule(m, s, p):
             """
@@ -281,31 +279,54 @@ def snapshot_cluster_constraints(network, snapshots):
             """
             return (m.state_of_charge_intra[s, p] == 0)
     
-        network.model.period_bound = po.Constraint(
-            network.model.storages, network.model.period_starts, rule = intra_soc_rule)       
+  #      network.model.period_bound = po.Constraint(
+    #        network.model.storages, network.model.period_starts, rule = intra_soc_rule)       
+
+        def intra_soc_rule_all(m, s, h):
+            """
+            Sets the soc_intra of every first hour to zero
+            """
+            #import pdb; pdb.set_trace()
+            
+            if h.hour ==  0:
+                expr = (m.state_of_charge_intra[s, h] == 0)
+            else:
+
+                eta = 1 #network.storage_units.at[s, 'efficiency_store']
+                    
+                expr = (
+                    m.state_of_charge_intra[s, h ] ==
+                    m.state_of_charge_intra[s, h-pd.DateOffset(hours=1)] 
+                    #* (1 - network.storage_units.at[s, 'standing_loss'])
+                    -( eta * m.storage_p_dispatch[s,h-pd.DateOffset(hours=1)] -
+                        eta *  m.storage_p_store[s,h-pd.DateOffset(hours=1)]))
+            return expr
+        
+        #import pdb; pdb.set_trace()
+        network.model.soc_intra_all = po.Constraint(
+            network.model.storages, network.snapshots, rule = intra_soc_rule_all)       
         
         # create inter soc variable for each storage and each candidate
         # (e.g. day of year for daily clustering) 
         network.model.state_of_charge_inter = po.Var(
             sus.index, network.model.candidates, 
-            within=po.NonNegativeReals) 
-        
-    
+            within=po.NonNegativeReals)
         def inter_storage_soc_rule(m, s, i):
             """
             Define the state_of_charge_inter as the state_of_charge_inter of the day before minus the storage losses 
             plus the state_of_charge (intra) of the last hour of the representative day
             """
-                       
-        
-            if i == network.model.candidates[-1]:
-                expr = (m.state_of_charge_inter[s, i] ==
-                 m.state_of_charge_inter[s, network.model.candidates[1]])
+
+            if i == network.model.candidates[-1]: # bug: sets soc of first hour of last day to soc of first hour of first day
+                expr =(m.state_of_charge_inter[s, i] ==
+                 m.state_of_charge_inter[s, i])
+               # expr = (m.state_of_charge_inter[s, i] ==
+               #  m.state_of_charge_inter[s, network.model.candidates[1]])
             else:
                 expr = (
-                    m.state_of_charge_inter[s, i + 1] ==
+                    m.state_of_charge_inter[s, i+1 ] ==
                     m.state_of_charge_inter[s, i] 
-                    * (1 - network.storage_units.at[s, 'standing_loss'])**24
+                    #* (1 - network.storage_units.at[s, 'standing_loss'])**24
                     + m.state_of_charge_intra[s, network.cluster["last_hour_RepresentativeDay"][i]])
             return expr
         network.model.inter_storage_soc_constraint = po.Constraint(
@@ -314,36 +335,53 @@ def snapshot_cluster_constraints(network, snapshots):
         
         
 # =============================================================================
-#         def inter_storage_capacity_rule(m, s, i):
-#             """
-#             Limit the capacity of the storage for every hour of the candidate day
-#             """
-#             
-#             return (
-#                    m.state_of_charge_inter[s, i] 
-#                    * (1 - network.storage_units.at[s,'standing_loss'])**24  
-#                    + m.state_of_charge_intra[s, network.cluster['last_hour_RepresentativeDay'][i]] <=
-#                     network.storage_units.at[s, 'max_hours'] * network.storage_units.at[s,'p_nom']
-#                     ) 
-#              
-#         
-#         network.model.inter_storage_capacity_constraint = po.Constraint(
-# =============================================================================
-# =============================================================================
-#             sus.index, network.model.candidates,
-#             rule = inter_storage_capacity_rule)
-# =============================================================================
-             
-        
-        #new definition of the state_of_charge used in pypsa
-        def total_state_of_charge(m,s,h):
+        """def inter_storage_capacity_rule(m, s, i):
+
             
-            return( m.state_of_charge[s,h] == m.state_of_charge_intra[s,h] + network.model.state_of_charge_inter[s,df_i_h['Candidate_day'][h]])                
+             return (
+                    m.state_of_charge_inter[s, i] 
+                    #* (1 - network.storage_units.at[s,'standing_loss'])**24  
+                    + m.state_of_charge_intra[s, network.cluster['last_hour_RepresentativeDay'][i]] <=
+                     network.storage_units.at[s, 'max_hours'] * network.storage_units.at[s,'p_nom']
+                     ) 
+              
+         
+        network.model.inter_storage_capacity_constraint = po.Constraint(
+             sus.index, network.model.candidates,
+             rule = inter_storage_capacity_rule)
+# =============================================================================
+        network.model.del_component('state_of_charge_upper')
+        network.model.del_component('state_of_charge_upper_index')
+        network.model.del_component('state_of_charge_upper_index_0')
+        network.model.del_component('state_of_charge_upper_index_1')"""
+        #new definition of the state_of_charge used in pypsa
+        
+        network.model.del_component('state_of_charge_constraint')
+        network.model.del_component('state_of_charge_constraint_index')
+        network.model.del_component('state_of_charge_constraint_index_0')
+        network.model.del_component('state_of_charge_constraint_index_1')
+        
+        
+        def total_state_of_charge(m,s,h):
+
+            #import pdb; pdb.set_trace() 
+            return( m.state_of_charge[s,h] == m.state_of_charge_intra[s,h] + m.state_of_charge_inter[s,df_i_h['Candidate_day'][h]])                
             
             
         network.model.total_storage_constraint = po.Constraint(
                 sus.index, network.snapshots, rule = total_state_of_charge)
-        
+
+        def cyclic_state_of_charge(m,s):
+            #das passt noch nicht ganz
+            eta = 1
+            h = network.snapshots[-1]-pd.DateOffset(hours=1)
+            return( m.state_of_charge[s, network.snapshots[-1]] == \
+                   m.state_of_charge[s,network.snapshots[0]]+(eta * m.storage_p_dispatch[s,h] -
+                        eta *  m.storage_p_store[s,h]))                
+            
+            
+        network.model.cyclic_storage_constraint = po.Constraint(
+                sus.index,  rule = cyclic_state_of_charge)
               
         
 def daily_bounds(network, snapshots):
