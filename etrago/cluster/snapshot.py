@@ -47,13 +47,14 @@ __author__ = "Simon Hilpert"
 
 write_results=True
 
-def snapshot_clustering(network, args, resultspath, how='daily', clusters=[]):
+def snapshot_clustering(network, args, how='daily'):
     """
     """
-    
+    resultspath = args['csv_export']
+    clusters = args['snapshot_clustering']
     # original problem
-    #network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
-            #      how=how, normed=False)
+ #   network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
+  #                how=how, normed=False)
     
     network_original=network.copy()
     
@@ -166,20 +167,58 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         #import pdb; pdb.set_trace()
         update_data_frames(network, cluster_weights, dates, hours)
         
-        network.lopf(network.snapshots, extra_functionality=snapshot_cluster_constraints,
-                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0}, formulation = 'kirchhoff')
+        network.lopf(network.snapshots, 
+                     extra_functionality=snapshot_cluster_constraints,
+                     solver_name=args['solver'], 
+                     solver_options=args['solver_options'], 
+                     formulation = 'kirchhoff')
         
+        # disaggregate soc results
+        network.storage_units_t['state_of_charge_intra'] = pd.DataFrame(
+                index = network.storage_units_t.state_of_charge.index, 
+                columns = network.storage_units.index)
+        network.storage_units_t['state_of_charge_inter'] = pd.DataFrame(
+                index = network.storage_units_t.state_of_charge.index, 
+                columns = network.storage_units.index)
+        
+        d = network.model.state_of_charge_intra.extract_values()
+        for k in d.keys():
+            network.storage_units_t['state_of_charge_intra'][k[0]][k[1]] = d[k]
+        inter = network.model.state_of_charge_inter.extract_values() 
+        
+        for s in network.cluster.index: 
+            snapshots = network.snapshots[network.snapshots.dayofyear-1  == network.cluster['RepresentativeDay'][s]]
+            day = pd.date_range(start= pd.to_datetime(s-1, unit='d', origin=pd.Timestamp('2011-01-01')), periods=24, freq = 'h')
+            for su in network.storage_units.index:
+                network.storage_units_t['state_of_charge_inter'][su][day] = \
+                    inter[(su, s)]
+                if not (day == snapshots).all():
+                    network.storage_units_t['state_of_charge_intra'][su][day]=\
+                    network.storage_units_t['state_of_charge_intra'][su][snapshots]
+                    
+                    network.storage_units_t['state_of_charge_inter'][su][day] = \
+                    inter[(su, s)]
+                
+                    network.storage_units_t['state_of_charge'][su][day] = \
+                    network.storage_units_t['state_of_charge_intra'][su][day] \
+                    + network.storage_units_t['state_of_charge_inter'][su][day]
+                    
     else:
         path=os.path.join(path, 'original')
         
         # network.cluster=False
         
-        network.lopf(network.snapshots, extra_functionality=None,
-                     solver_name='gurobi', solver_options={'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'threads':4, 'method':2, 'crossover':0}, formulation = 'kirchhoff')
+        network.lopf(network.snapshots,
+                     extra_functionality=None,
+                     solver_name=args['solver'], 
+                     solver_options=args['solver_options'],
+                     formulation = 'kirchhoff')
         df_cluster=None
            
+        
+    
     if write_results:
-        results_to_csv(network, path, args, pf_solution=None)
+        results_to_csv(network, args, path, pf_solution=None)
         write_lpfile(network, path=os.path.join(path, 'file.lp'))
     
     return network, df_cluster
@@ -253,7 +292,6 @@ def snapshot_cluster_constraints(network, snapshots):
     been done as it belongs to the model as sets for constraints and variables
 
     """
-
     #if network.cluster:
     sus = network.storage_units
     # take every first hour of the clustered days
@@ -272,63 +310,61 @@ def snapshot_cluster_constraints(network, snapshots):
         network.model.state_of_charge_intra = po.Var(
             sus.index, network.snapshots)#,
            # within=po.NonNegativeReals) 
-        
-        def intra_soc_rule(m, s, p):
-            """
-            Sets the soc_intra of every first hour to zero
-            """
-            return (m.state_of_charge_intra[s, p] == 0)
-    
-  #      network.model.period_bound = po.Constraint(
-    #        network.model.storages, network.model.period_starts, rule = intra_soc_rule)       
 
-        def intra_soc_rule_all(m, s, h):
+        def intra_soc_rule(m, s, h):
             """
-            Sets the soc_intra of every first hour to zero
+            Sets the soc_intra of every hour
             """
             #import pdb; pdb.set_trace()
             
             if h.hour ==  0:
                 expr = (m.state_of_charge_intra[s, h] == 0)
             else:
-
-                eta = 1 #network.storage_units.at[s, 'efficiency_store']
                     
                 expr = (
                     m.state_of_charge_intra[s, h ] ==
                     m.state_of_charge_intra[s, h-pd.DateOffset(hours=1)] 
-                    #* (1 - network.storage_units.at[s, 'standing_loss'])
-                    -( eta * m.storage_p_dispatch[s,h-pd.DateOffset(hours=1)] -
-                        eta *  m.storage_p_store[s,h-pd.DateOffset(hours=1)]))
+                    * (1 - network.storage_units.at[s, 'standing_loss'])
+                    -(m.storage_p_dispatch[s,h-pd.DateOffset(hours=1)]/
+                        network.storage_units.at[s, 'efficiency_dispatch'] -
+                        network.storage_units.at[s, 'efficiency_store'] * 
+                        m.storage_p_store[s,h-pd.DateOffset(hours=1)]))
             return expr
-        
-        #import pdb; pdb.set_trace()
+
         network.model.soc_intra_all = po.Constraint(
-            network.model.storages, network.snapshots, rule = intra_soc_rule_all)       
+            network.model.storages, network.snapshots, rule = intra_soc_rule)       
         
         # create inter soc variable for each storage and each candidate
         # (e.g. day of year for daily clustering) 
         network.model.state_of_charge_inter = po.Var(
             sus.index, network.model.candidates, 
             within=po.NonNegativeReals)
+
         def inter_storage_soc_rule(m, s, i):
             """
             Define the state_of_charge_inter as the state_of_charge_inter of the day before minus the storage losses 
             plus the state_of_charge (intra) of the last hour of the representative day
             """
 
-            if i == network.model.candidates[-1]: # bug: sets soc of first hour of last day to soc of first hour of first day
-                expr =(m.state_of_charge_inter[s, i] ==
-                 m.state_of_charge_inter[s, i])
+            if i == network.model.candidates[-1]: # nicht exakt das selbe wie die pypsa cyclic bedingung, warum?
+                expr = (m.state_of_charge_inter[s, i] == m.state_of_charge_inter[s, i])#(
+                #m.state_of_charge_inter[s, network.model.candidates[1]] ==
+               # m.state_of_charge_inter[s, i]
+              #  * (1 - network.storage_units.at[s, 'standing_loss'])**24
+              #  + m.state_of_charge_intra[
+                       # s, network.cluster["last_hour_RepresentativeDay"][i]])
+
                # expr = (m.state_of_charge_inter[s, i] ==
                #  m.state_of_charge_inter[s, network.model.candidates[1]])
             else:
                 expr = (
-                    m.state_of_charge_inter[s, i+1 ] ==
-                    m.state_of_charge_inter[s, i] 
-                    #* (1 - network.storage_units.at[s, 'standing_loss'])**24
-                    + m.state_of_charge_intra[s, network.cluster["last_hour_RepresentativeDay"][i]])
+                m.state_of_charge_inter[s, i+1 ] ==
+                m.state_of_charge_inter[s, i] 
+                * (1 - network.storage_units.at[s, 'standing_loss'])**24
+                + m.state_of_charge_intra[
+                        s, network.cluster["last_hour_RepresentativeDay"][i]])
             return expr
+
         network.model.inter_storage_soc_constraint = po.Constraint(
             sus.index, network.model.candidates,
             rule=inter_storage_soc_rule)
@@ -364,20 +400,22 @@ def snapshot_cluster_constraints(network, snapshots):
         
         def total_state_of_charge(m,s,h):
 
-            #import pdb; pdb.set_trace() 
-            return( m.state_of_charge[s,h] == m.state_of_charge_intra[s,h] + m.state_of_charge_inter[s,df_i_h['Candidate_day'][h]])                
-            
-            
+            return( m.state_of_charge[s,h] ==
+                   m.state_of_charge_intra[s,h] +
+                   m.state_of_charge_inter[s,df_i_h['Candidate_day'][h]])                
+
         network.model.total_storage_constraint = po.Constraint(
                 sus.index, network.snapshots, rule = total_state_of_charge)
 
         def cyclic_state_of_charge(m,s):
             #das passt noch nicht ganz
-            eta = 1
-            h = network.snapshots[-1]-pd.DateOffset(hours=1)
-            return( m.state_of_charge[s, network.snapshots[-1]] == \
-                   m.state_of_charge[s,network.snapshots[0]]+(eta * m.storage_p_dispatch[s,h] -
-                        eta *  m.storage_p_store[s,h]))                
+           # steht jetzt in der intra_rule
+            return  (m.state_of_charge[s,network.snapshots[0]]== \
+                   (m.state_of_charge[s,network.snapshots[-1]]
+                   -(m.storage_p_dispatch[s,network.snapshots[-1]]/ 
+                           network.storage_units.at[s, 'efficiency_dispatch']
+                           -m.storage_p_store[s,network.snapshots[-1]] * 
+                           network.storage_units.at[s, 'efficiency_store'])))
             
             
         network.model.cyclic_storage_constraint = po.Constraint(

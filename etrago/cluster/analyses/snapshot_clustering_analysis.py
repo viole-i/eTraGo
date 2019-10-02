@@ -28,7 +28,7 @@ home = os.path.expanduser('/home/clara/000')
 for i in kmean:
     i =int(i)
     
-    resultspath = os.path.join(home, 'Beispielrechnung')
+    resultspath = os.path.join(home, 'Beispielrechnung3')
     clustered_path = path.join(resultspath, 'daily')
     original_path = path.join(resultspath, 'original')
 
@@ -40,7 +40,7 @@ for i in kmean:
     
             abs_err[str(c)] = network_c['objective'].values[0]
             rel_err[str(c)] = ((abs(network['objective'].values[0] -
-                                network_c['objective'].values[0])) / 
+                                network_c['objective'].values[0])) / \
                                 network['objective'].values[0] * 100)
             abs_time[str(c)] = float(network_c['time'])
             rel_time[str(c)] = (float(network_c['time']) /

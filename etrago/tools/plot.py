@@ -1737,7 +1737,22 @@ def storage_p_soc(network, mean='1H', filename = None):
 
     return
 
-
+def soc_intra_inter(network, su, filename = None):
+    fig, ax = plt.subplots(1, 1)
+    df = pd.DataFrame(index = network.storage_units_t['state_of_charge'][su].index,
+                      columns = ['state_of_charge_inter', 
+                                 'state_of_charge_intra','state_of_charge' ])
+    df['state_of_charge_inter'] = network.storage_units_t['state_of_charge_inter'][su]
+    df['state_of_charge_intra'] = network.storage_units_t['state_of_charge_intra'][su]
+    df['state_of_charge'] = network.storage_units_t['state_of_charge'][su]
+    df.plot(ax=ax)
+    
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename,figsize=(3,4),bbox_inches='tight')
+        plt.close()
+    
 def storage_soc_sorted(network, filename = None):
     """
     Plots the soc (state-pf-charge) of extendable storages
