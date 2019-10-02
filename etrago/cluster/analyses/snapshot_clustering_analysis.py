@@ -21,23 +21,28 @@ rel_time = {}
 benchmark_time={}
 benchmark_objective={}
 ks=[]
-
-home = os.path.expanduser('/home/clara/000')
+abs_su_expansion={}
+rel_su_expansion={}
+#home = os.path.expanduser('/home/clara/000')
 
 #receive information from the results of the calculation 
 for i in kmean:
     i =int(i)
     
-    resultspath = os.path.join(home, 'Beispielrechnung3')
+    resultspath = '/home/clara/Schreibtisch/snapshot_clustering_analysis/month'
     clustered_path = path.join(resultspath, 'daily')
     original_path = path.join(resultspath, 'original')
 
     network = pd.read_csv(path.join(original_path, 'network.csv'))
+    storage_units = pd.read_csv(path.join(original_path, 'storage_units.csv'))
+    storage_expansion = storage_units.p_nom_opt[storage_units.p_nom_extendable].sum()
     
     for c in listdir(clustered_path): # go through the snapshot_parameters
         if c != 'Z.csv': 
             network_c = pd.read_csv(path.join(clustered_path, c, 'network.csv'))
-    
+            storage_units_c = pd.read_csv(path.join(clustered_path, c, 'storage_units.csv'))
+            storage_expansion_c = storage_units_c.p_nom_opt[storage_units_c.p_nom_extendable].sum()
+
             abs_err[str(c)] = network_c['objective'].values[0]
             rel_err[str(c)] = ((abs(network['objective'].values[0] -
                                 network_c['objective'].values[0])) / \
@@ -47,7 +52,10 @@ for i in kmean:
                                 float(network['time']) * 100)
             benchmark_time[str(c)] = float(network['time'])
             benchmark_objective[str(c)] = network['objective'].values[0]
-    
+            abs_su_expansion[str(c)] = storage_expansion_c
+            rel_su_expansion[str(c)] = ((abs(storage_expansion -
+                                storage_expansion_c)) /
+                                storage_expansion * 100)
     #create a dataframe with the needed results for each kmean        
     results = pd.DataFrame({
                         '1_obj_abs': abs_err,
@@ -55,7 +63,9 @@ for i in kmean:
                         '3_obj_benchmark': benchmark_objective,
                         '4_time_abs': abs_time,
                         '5_time_rel': rel_time,
-                        '6_time_benchmark':benchmark_time})
+                        '6_time_benchmark':benchmark_time,
+                        '7_abs_storage_expansion': abs_su_expansion,
+                        '8_rel_storage_expansion': rel_su_expansion})
     results.index = [int(i) for i in results.index]
     results.sort_index(inplace=True)
     
@@ -77,7 +87,7 @@ def plot_2d(variable, name):
     ax.set_ylabel(name)
     plt.legend(loc='best')
     plt.show()
-    fig.savefig(path.join(home, 'Analysis_2d,'+ name + '.png'))
+    fig.savefig(path.join(resultspath , 'Analysis_2d,'+ name + '.png'))
 
  #plotting time and objective function
 plot_2d('4_time_abs',name='absolute time in s')
@@ -85,3 +95,7 @@ plot_2d('5_time_rel',name='relative time deviation in %')
 
 plot_2d('1_obj_abs',name='absolute objective function')
 plot_2d('2_obj_rel',name='relative objective function deviation in %')
+
+
+plot_2d('7_abs_storage_expansion',name='absolute storage expansion in MW')
+plot_2d('8_rel_storage_expansion',name='relative storage expansion deviation in %')

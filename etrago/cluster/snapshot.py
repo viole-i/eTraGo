@@ -53,8 +53,8 @@ def snapshot_clustering(network, args, how='daily'):
     resultspath = args['csv_export']
     clusters = args['snapshot_clustering']
     # original problem
- #   network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
-  #                how=how, normed=False)
+    network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
+                  how=how, normed=False)
     
     network_original=network.copy()
     
@@ -94,34 +94,39 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
     timeseries = aggregation.createTypicalPeriods()
     cluster_weights = aggregation.clusterPeriodNoOccur
     clusterOrder =aggregation.clusterOrder
-    global clusterCenterIndices
     clusterCenterIndices= aggregation.clusterCenterIndices 
    
     # get all index for every hour of that day of the clusterCenterIndices
-    start=[]  # get the first hour of the clusterCenterIndices (days start with 0)
+    start=[]  
+    # get the first hour of the clusterCenterIndices (days start with 0)
     for i in clusterCenterIndices:
         start.append(i*hours)
-    nrhours=[]  # get a list with all hours belonging to the clusterCenterIndices
+        
+    # get a list with all hours belonging to the clusterCenterIndices
+    nrhours=[]  
     for j in start:
         nrhours.append(j)
-        x=1
+        x = 1
         while x < hours: 
-            j=j+1
+            j = j + 1
             nrhours.append(j)
-            x=x+1
+            x = x + 1
                 
     # get the origial Datetimeindex
     dates = timeseries_df.iloc[nrhours].index 
     
     #get list of representative days   
     representative_day=[]
-    dic_clusterCenterIndices = dict(enumerate(clusterCenterIndices)) #cluster:medoid des jeweiligen Clusters
+
+    #cluster:medoid des jeweiligen Clusters
+    dic_clusterCenterIndices = dict(enumerate(clusterCenterIndices)) 
     for i in clusterOrder: 
         representative_day.append(dic_clusterCenterIndices[i])
+
     #get list of last hour of representative days
     last_hour_datetime=[]
     for i in representative_day:
-        last_hour = i*hours+hours-1
+        last_hour = i * hours + hours - 1
         last_hour_datetime.append(timeseries_df.index[last_hour])
     #create a dataframe (index=nr. of day in a year/candidate)
     df_cluster =  pd.DataFrame({
@@ -140,13 +145,56 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
         while j <= hours: 
             nr_day.append(i)
             j=j+1     
-   
-    global df_i_h
     df_i_h = pd.DataFrame({'Timeseries': timeseries_df.index, 
                         'Candidate_day': nr_day}) 
     df_i_h.set_index('Timeseries',inplace=True)
-            
-    return df_cluster, cluster_weights, dates, hours
+
+    return df_cluster, cluster_weights, dates, hours, df_i_h
+
+def disaggregate_soc_results(network):
+    """
+    Disaggregate snapshot clustered results. 
+    Set soc_intra from cluster-days, soc_inter for each day and 
+    soc as sum of soc_intra and soc_inter.
+    """
+    
+    
+    network.storage_units_t['state_of_charge_intra'] = pd.DataFrame(
+                index = network.storage_units_t.state_of_charge.index, 
+                columns = network.storage_units.index)
+    network.storage_units_t['state_of_charge_inter'] = pd.DataFrame(
+                index = network.storage_units_t.state_of_charge.index, 
+                columns = network.storage_units.index)
+        
+    d = network.model.state_of_charge_intra.extract_values()
+    for k in d.keys():
+            network.storage_units_t['state_of_charge_intra'][k[0]][k[1]] = d[k]
+    inter = network.model.state_of_charge_inter.extract_values() 
+        
+    for s in network.cluster.index: 
+        snapshots = network.snapshots[
+                network.snapshots.dayofyear-1  ==
+                network.cluster['RepresentativeDay'][s]]
+
+        day = pd.date_range(
+                start = pd.to_datetime(s-1, 
+                                       unit='d',
+                                       origin=pd.Timestamp('2011-01-01')), 
+                                       periods=24, freq = 'h')
+
+        for su in network.storage_units.index:
+            network.storage_units_t['state_of_charge_inter'][su][day] = \
+                    inter[(su, s)]
+            if not (day == snapshots).all():
+                network.storage_units_t['state_of_charge_intra'][su][day]=\
+                network.storage_units_t['state_of_charge_intra'][su][snapshots]
+                    
+                network.storage_units_t['state_of_charge_inter'][su][day] = \
+                    inter[(su, s)]
+                
+                network.storage_units_t['state_of_charge'][su][day] = \
+                    network.storage_units_t['state_of_charge_intra'][su][day] \
+                    + network.storage_units_t['state_of_charge_inter'][su][day]
 
 def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         normed=False):
@@ -155,16 +203,15 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
     
     if n_clusters is not None:
         path=os.path.join(path, str(n_clusters))
-        
-        # reduce storage costs due to clusters
-        # network.cluster = True
 
         # calculate clusters
-        df_cluster, cluster_weights, dates, hours = tsam_cluster(prepare_pypsa_timeseries(network),
-                           typical_periods=n_clusters,
-                           how='daily')       
+        df_cluster, cluster_weights, dates, hours, df_i_h = tsam_cluster(
+                prepare_pypsa_timeseries(network),
+                typical_periods=n_clusters,
+                how='daily')       
         network.cluster = df_cluster
-        #import pdb; pdb.set_trace()
+        network.cluster_ts = df_i_h
+
         update_data_frames(network, cluster_weights, dates, hours)
         
         network.lopf(network.snapshots, 
@@ -174,34 +221,7 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
                      formulation = 'kirchhoff')
         
         # disaggregate soc results
-        network.storage_units_t['state_of_charge_intra'] = pd.DataFrame(
-                index = network.storage_units_t.state_of_charge.index, 
-                columns = network.storage_units.index)
-        network.storage_units_t['state_of_charge_inter'] = pd.DataFrame(
-                index = network.storage_units_t.state_of_charge.index, 
-                columns = network.storage_units.index)
-        
-        d = network.model.state_of_charge_intra.extract_values()
-        for k in d.keys():
-            network.storage_units_t['state_of_charge_intra'][k[0]][k[1]] = d[k]
-        inter = network.model.state_of_charge_inter.extract_values() 
-        
-        for s in network.cluster.index: 
-            snapshots = network.snapshots[network.snapshots.dayofyear-1  == network.cluster['RepresentativeDay'][s]]
-            day = pd.date_range(start= pd.to_datetime(s-1, unit='d', origin=pd.Timestamp('2011-01-01')), periods=24, freq = 'h')
-            for su in network.storage_units.index:
-                network.storage_units_t['state_of_charge_inter'][su][day] = \
-                    inter[(su, s)]
-                if not (day == snapshots).all():
-                    network.storage_units_t['state_of_charge_intra'][su][day]=\
-                    network.storage_units_t['state_of_charge_intra'][su][snapshots]
-                    
-                    network.storage_units_t['state_of_charge_inter'][su][day] = \
-                    inter[(su, s)]
-                
-                    network.storage_units_t['state_of_charge'][su][day] = \
-                    network.storage_units_t['state_of_charge_intra'][su][day] \
-                    + network.storage_units_t['state_of_charge_inter'][su][day]
+        disaggregate_soc_results(network)
                     
     else:
         path=os.path.join(path, 'original')
@@ -286,13 +306,18 @@ def update_data_frames(network, cluster_weights, dates, hours):
 
 def snapshot_cluster_constraints(network, snapshots):
     """  
-    Notes
-    ------
-    Adding arrays etc. to `network.model` as attribute is not required but has
-    been done as it belongs to the model as sets for constraints and variables
+    Sets snapshot cluster constraints for storage units according to :
+    L. Kotzur et al: 'Time series aggregation for energy system design: 
+    Modeling seasonal storage', 2018.
+    
+    Parameters
+    -----------
+    network : :class:`pypsa.Network
+        Overall container of PyPSA
 
+    snapshots: pd.DateTimeSeries
+        List of snapshots 
     """
-    #if network.cluster:
     sus = network.storage_units
     # take every first hour of the clustered days
     network.model.period_starts = network.snapshot_weightings.index[0::24]
@@ -308,14 +333,18 @@ def snapshot_cluster_constraints(network, snapshots):
 
         # create intra soc variable for each storage and each hour
         network.model.state_of_charge_intra = po.Var(
-            sus.index, network.snapshots)#,
-           # within=po.NonNegativeReals) 
+            sus.index, network.snapshots)
 
         def intra_soc_rule(m, s, h):
             """
-            Sets the soc_intra of every hour
+            Defines the soc_intra of every hour.
+            First hour of every day is set to 0. Other hours are set by 
+            physical properties.
+            
+            According to:
+            L. Kotzur et al: 'Time series aggregation for energy system design: 
+            Modeling seasonal storage', 2018, equation no. 18
             """
-            #import pdb; pdb.set_trace()
             
             if h.hour ==  0:
                 expr = (m.state_of_charge_intra[s, h] == 0)
@@ -335,27 +364,23 @@ def snapshot_cluster_constraints(network, snapshots):
             network.model.storages, network.snapshots, rule = intra_soc_rule)       
         
         # create inter soc variable for each storage and each candidate
-        # (e.g. day of year for daily clustering) 
         network.model.state_of_charge_inter = po.Var(
             sus.index, network.model.candidates, 
             within=po.NonNegativeReals)
 
         def inter_storage_soc_rule(m, s, i):
             """
-            Define the state_of_charge_inter as the state_of_charge_inter of the day before minus the storage losses 
-            plus the state_of_charge (intra) of the last hour of the representative day
+            Define the state_of_charge_inter as the state_of_charge_inter of
+            the day before minus the storage losses plus the state_of_charge 
+            (intra) of the last hour of the representative day
+            
+            According to:
+            L. Kotzur et al: 'Time series aggregation for energy system design: 
+            Modeling seasonal storage', 2018, equation no. 19
             """
 
-            if i == network.model.candidates[-1]: # nicht exakt das selbe wie die pypsa cyclic bedingung, warum?
-                expr = (m.state_of_charge_inter[s, i] == m.state_of_charge_inter[s, i])#(
-                #m.state_of_charge_inter[s, network.model.candidates[1]] ==
-               # m.state_of_charge_inter[s, i]
-              #  * (1 - network.storage_units.at[s, 'standing_loss'])**24
-              #  + m.state_of_charge_intra[
-                       # s, network.cluster["last_hour_RepresentativeDay"][i]])
-
-               # expr = (m.state_of_charge_inter[s, i] ==
-               #  m.state_of_charge_inter[s, network.model.candidates[1]])
+            if i == network.model.candidates[-1]:
+                expr = po.Constraint.Skip
             else:
                 expr = (
                 m.state_of_charge_inter[s, i+1 ] ==
@@ -369,54 +394,41 @@ def snapshot_cluster_constraints(network, snapshots):
             sus.index, network.model.candidates,
             rule=inter_storage_soc_rule)
         
-        
-# =============================================================================
-        """def inter_storage_capacity_rule(m, s, i):
-
-            
-             return (
-                    m.state_of_charge_inter[s, i] 
-                    #* (1 - network.storage_units.at[s,'standing_loss'])**24  
-                    + m.state_of_charge_intra[s, network.cluster['last_hour_RepresentativeDay'][i]] <=
-                     network.storage_units.at[s, 'max_hours'] * network.storage_units.at[s,'p_nom']
-                     ) 
-              
-         
-        network.model.inter_storage_capacity_constraint = po.Constraint(
-             sus.index, network.model.candidates,
-             rule = inter_storage_capacity_rule)
-# =============================================================================
-        network.model.del_component('state_of_charge_upper')
-        network.model.del_component('state_of_charge_upper_index')
-        network.model.del_component('state_of_charge_upper_index_0')
-        network.model.del_component('state_of_charge_upper_index_1')"""
         #new definition of the state_of_charge used in pypsa
-        
         network.model.del_component('state_of_charge_constraint')
         network.model.del_component('state_of_charge_constraint_index')
         network.model.del_component('state_of_charge_constraint_index_0')
         network.model.del_component('state_of_charge_constraint_index_1')
         
-        
         def total_state_of_charge(m,s,h):
+            """
+            Define the state_of_charge as the sum of state_of_charge_inter 
+            and state_of_charge_intra
+            
+            According to:
+            L. Kotzur et al: 'Time series aggregation for energy system design: 
+            Modeling seasonal storage', 2018
+            """
 
-            return( m.state_of_charge[s,h] ==
-                   m.state_of_charge_intra[s,h] +
-                   m.state_of_charge_inter[s,df_i_h['Candidate_day'][h]])                
+            return(m.state_of_charge[s,h] ==
+                   m.state_of_charge_intra[s,h] + m.state_of_charge_inter[
+                           s,network.cluster_ts['Candidate_day'][h]])                
 
         network.model.total_storage_constraint = po.Constraint(
                 sus.index, network.snapshots, rule = total_state_of_charge)
 
         def cyclic_state_of_charge(m,s):
-            #das passt noch nicht ganz
-           # steht jetzt in der intra_rule
+            """
+            Defines cyclic condition like pypsas 'state_of_charge_contraint'.
+            There are small differences to original results.
+            """
+
             return  (m.state_of_charge[s,network.snapshots[0]]== \
                    (m.state_of_charge[s,network.snapshots[-1]]
                    -(m.storage_p_dispatch[s,network.snapshots[-1]]/ 
                            network.storage_units.at[s, 'efficiency_dispatch']
                            -m.storage_p_store[s,network.snapshots[-1]] * 
                            network.storage_units.at[s, 'efficiency_store'])))
-            
             
         network.model.cyclic_storage_constraint = po.Constraint(
                 sus.index,  rule = cyclic_state_of_charge)
