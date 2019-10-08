@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 from numpy import genfromtxt
 
-kmean = [50] #genfromtxt('C:\eTraGo\etrago\k_mean_parameter.csv')
+kmean = [70] #genfromtxt('C:\eTraGo\etrago\k_mean_parameter.csv')
 
 abs_err = {}
 rel_err = {}
@@ -31,7 +31,7 @@ rel_net_expansion = {}
 for i in kmean:
     i =int(i)
     
-    resultspath = '/home/clara/Schreibtisch/snapshot_clustering_analysis/120days'
+    resultspath = '/home/clara/Schreibtisch/snapshot_clustering_analysis/70k_4380hours_new'
     clustered_path = path.join(resultspath, 'daily')
     original_path = path.join(resultspath, 'original')
 

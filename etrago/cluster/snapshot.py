@@ -53,8 +53,8 @@ def snapshot_clustering(network, args, how='daily'):
     resultspath = args['csv_export']
     clusters = args['snapshot_clustering']
     # original problem
-    network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
-                  how=how, normed=False)
+  #  network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
+        #          how=how, normed=False)
     
     network_original=network.copy()
     
@@ -215,7 +215,7 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         update_data_frames(network, cluster_weights, dates, hours)
         
         network.lopf(network.snapshots, 
-                     extra_functionality=snapshot_cluster_constraints,
+                     extra_functionality= snapshot_cluster_constraints,
                      solver_name=args['solver'], 
                      solver_options=args['solver_options'], 
                      formulation = 'kirchhoff')
@@ -344,19 +344,20 @@ def snapshot_cluster_constraints(network, snapshots):
             L. Kotzur et al: 'Time series aggregation for energy system design: 
             Modeling seasonal storage', 2018, equation no. 18
             """
-            
+            elapsed_hours = 1# network.snapshot_weightings[h]
             if h.hour ==  0:
                 expr = (m.state_of_charge_intra[s, h] == 0)
             else:
-                expr = po.Constraint.Skip
-                expr = (
+              # expr = po.Constraint.Skip                
+               expr = (
                     m.state_of_charge_intra[s, h ] ==
                     m.state_of_charge_intra[s, h-pd.DateOffset(hours=1)] 
                     * (1 - network.storage_units.at[s, 'standing_loss'])
-                    -(m.storage_p_dispatch[s,h-pd.DateOffset(hours=1)]/
-                        network.storage_units.at[s, 'efficiency_dispatch'] -
-                        network.storage_units.at[s, 'efficiency_store'] * 
-                        m.storage_p_store[s,h-pd.DateOffset(hours=1)]))
+                    + elapsed_hours * (
+                            network.storage_units.at[s, 'efficiency_store'] * 
+                            m.storage_p_store[s,h]#-pd.DateOffset(hours=1)]
+                           -  m.storage_p_dispatch[s,h]#-pd.DateOffset(hours=1)]*
+                        *1/network.storage_units.at[s, 'efficiency_dispatch'] ))
             return expr
 
         network.model.soc_intra_all = po.Constraint(
@@ -379,33 +380,37 @@ def snapshot_cluster_constraints(network, snapshots):
             L. Kotzur et al: 'Time series aggregation for energy system design: 
             Modeling seasonal storage', 2018, equation no. 19
             """
-            last_hour = network.cluster["last_hour_RepresentativeDay"][i]
-
+            
+            elapsed_hours = 1#network.snapshot_weightings[i]
             if i == network.model.candidates[-1]:
+                last_hour = network.cluster["last_hour_RepresentativeDay"][i]
                # print(last_hour)
-               # expr = po.Constraint.Skip
-                expr = (
-                m.state_of_charge_inter[s, network.model.candidates[1] ] ==
-               m.state_of_charge_inter[s, i] 
-                * (1 - network.storage_units.at[s, 'standing_loss'])**24
-                + m.state_of_charge_intra[s, last_hour]\
-                        * (1 - network.storage_units.at[s, 'standing_loss'])
-                        -(m.storage_p_dispatch[s, last_hour]/\
-                        network.storage_units.at[s, 'efficiency_dispatch'] -
-                        network.storage_units.at[s, 'efficiency_store'] * 
-                        m.storage_p_store[s,last_hour]))
+                expr = po.Constraint.Skip
+#                expr = (
+#                m.state_of_charge_inter[s, network.model.candidates[1] ] ==
+#               m.state_of_charge_inter[s, i] 
+#                * (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)**24
+#                + m.state_of_charge_intra[s, last_hour]\
+#                        * (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)\
+#                        + elapsed_hours * (
+#                                network.storage_units.at[s, 'efficiency_store']
+#                                * m.storage_p_store[s,last_hour]
+#                                - 1/network.storage_units.at[s, 'efficiency_dispatch']
+#                                *m.storage_p_dispatch[s, last_hour]))
 
             else:
+                last_hour = network.cluster["last_hour_RepresentativeDay"][i]
                 expr = (
                 m.state_of_charge_inter[s, i+1 ] ==
                 m.state_of_charge_inter[s, i] 
                 * (1 - network.storage_units.at[s, 'standing_loss'])**24
                 + m.state_of_charge_intra[s, last_hour]\
-                        * (1 - network.storage_units.at[s, 'standing_loss'])\
-                        -(m.storage_p_dispatch[s, last_hour]/\
-                        network.storage_units.at[s, 'efficiency_dispatch'] -
-                        network.storage_units.at[s, 'efficiency_store'] * 
-                        m.storage_p_store[s,last_hour]))
+                        * (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)\
+                        + elapsed_hours * (
+                                network.storage_units.at[s, 'efficiency_store']
+                                * m.storage_p_store[s,last_hour]
+                                - 1/network.storage_units.at[s, 'efficiency_dispatch']
+                                *m.storage_p_dispatch[s, last_hour]))
         
             return expr
 
@@ -451,14 +456,16 @@ def snapshot_cluster_constraints(network, snapshots):
             date = str(network.snapshots[
                 network.snapshots.dayofyear -1 ==
                 network.cluster['RepresentativeDay'][h.dayofyear]][0]).split(' ')[0]
-            
+            elapsed_hours = network.snapshot_weightings[network.snapshots[
+                network.snapshots.dayofyear -1 ==
+                network.cluster['RepresentativeDay'][h.dayofyear]][0]]
             hour = str(h).split(' ')[1]
             
             intra_hour = pd.to_datetime(date + ' ' + hour)
 
             return(m.state_of_charge_intra[s,intra_hour] + 
                    m.state_of_charge_inter[s,network.cluster_ts['Candidate_day'][h]]
-                   * (1 - network.storage_units.at[s, 'standing_loss'])**24
+                   #* (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)**24
                    >= 0)                
 
         network.model.state_of_charge_lower = po.Constraint(
@@ -476,7 +483,9 @@ def snapshot_cluster_constraints(network, snapshots):
                 network.snapshots.dayofyear -1 ==
                 network.cluster['RepresentativeDay'][h.dayofyear]][0]).split(' ')[0]
             
-            
+            elapsed_hours = network.snapshot_weightings[network.snapshots[
+                network.snapshots.dayofyear -1 ==
+                network.cluster['RepresentativeDay'][h.dayofyear]][0]]
             hour = str(h).split(' ')[1]
             
             intra_hour = pd.to_datetime(date + ' ' + hour)
@@ -488,7 +497,7 @@ def snapshot_cluster_constraints(network, snapshots):
 
             return (m.state_of_charge_intra[s,intra_hour] + 
                     m.state_of_charge_inter[s,network.cluster_ts['Candidate_day'][h]] 
-                    * (1 - network.storage_units.at[s, 'standing_loss'])**24
+                    #* (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)**24
                     <= p_nom * network.storage_units.at[s,'max_hours']) 
               
          
@@ -502,7 +511,8 @@ def snapshot_cluster_constraints(network, snapshots):
             Defines cyclic condition like pypsas 'state_of_charge_contraint'.
             There are small differences to original results.
             """
-            
+            elapsed_hours = 1#network.snapshot_weightings[0]
+
             last_day = network.cluster.index[-1]
             
             last_calc_hour = network.cluster['last_hour_RepresentativeDay'][last_day]
@@ -520,14 +530,15 @@ def snapshot_cluster_constraints(network, snapshots):
             first_intra = m.state_of_charge_intra[s, first_calc_hour]
 
             return  (first_intra + first_inter == \
-                   (last_intra + last_inter
-                   -(m.storage_p_dispatch[s,last_calc_hour]/ 
+                   ((last_intra + last_inter)
+                   * (1 - network.storage_units.at[s, 'standing_loss']*elapsed_hours)
+                   -elapsed_hours*(m.storage_p_dispatch[s,last_calc_hour]/ 
                            network.storage_units.at[s, 'efficiency_dispatch']
                            -m.storage_p_store[s,last_calc_hour] * 
-                           network.storage_units.at[s, 'efficiency_store'])))
+                           network.storage_units.at[s, 'efficiency_store']))) 
 
-       # network.model.cyclic_storage_constraint = po.Constraint(
-          #      sus.index,  rule = cyclic_state_of_charge)
+        network.model.cyclic_storage_constraint = po.Constraint(
+                sus.index,  rule = cyclic_state_of_charge)
         
 def daily_bounds(network, snapshots):
     """ This will bound the storage level to 0.5 max_level every 24th hour.

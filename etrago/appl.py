@@ -111,7 +111,7 @@ args = {
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 72,
+    'end_snapshot': 168,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
                        'logFile': 'solver.log', 'threads':4, 'method':2, 'crossover':0},  # {} for default options
@@ -121,7 +121,7 @@ args = {
     'scn_decommissioning': None,  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'csv_export': 'teste_snapshot_clustering2',  # save results as csv: False or /path/tofolder
+    'csv_export': 'seasonal_sc',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
     'extendable': ['network', 'storage'],  # Array of components to optimize
@@ -134,7 +134,7 @@ args = {
     'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
     'network_clustering_ehv': False,   # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
-    'snapshot_clustering': [3], # False or the number of 'periods'
+    'snapshot_clustering': False, # False or the number of 'periods'
     # Simplifications:
     'parallelisation': False,  # run snapshots parallely.
     'skip_snapshots': False,

@@ -1817,7 +1817,31 @@ def storage_soc_sorted(network, filename = None):
         plt.close()
 
     return
+
+def plot_potential(network, carrier = 'solar', diff_flh = 1000):
+    fig, ax = plt.subplots(1, 1)
+    gens = network.generators.index[network.generators.carrier == carrier]
     
+    potential = network.generators_t.p_max_pu[gens].mul(
+            network.snapshot_weightings, axis = 0).sum()- diff_flh
     
+    potential.index = network.generators.bus[potential.index]
+    
+    potential_bus = pd.Series(index = network.buses.index, data = potential)
+    
+    network.plot(ax = ax, bus_sizes = potential_bus/500, 
+                 line_widths = {'Line':0.1, 'Link':0.1})
+
+
+        
+    plt.scatter([], [], c='blue', s=potential.max() ,
+                label='= ' + str(round(potential.max(), 0)) + ' FLH')
+    
+    handles, labels = ax.get_legend_handles_labels()
+    handles.remove(handles[0])
+    labels.remove(labels[0])
+    
+    plt.legend(handles, labels, scatterpoints=1, labelspacing=1, title='Difference of potential ' + carrier + ' FLH', borderpad=1.3, loc=2)
+
 if __name__ == '__main__':
     pass
