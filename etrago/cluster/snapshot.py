@@ -32,7 +32,7 @@ Remaining questions/tasks:
 
 import pandas as pd
 import os
-from etrago.tools.utilities import results_to_csv
+from etrago.tools.utilities import results_to_csv, iterate_lopf
 
 if 'READTHEDOCS' not in os.environ:
     import pyomo.environ as po
@@ -47,14 +47,14 @@ __author__ = "Simon Hilpert"
 
 write_results=True
 
-def snapshot_clustering(network, args, how='daily'):
+def snapshot_clustering(network, args, how='daily', extremePeriodMethod = 'None', clusterMethod='hierarchical'):
     """
     """
     resultspath = args['csv_export']
     clusters = args['snapshot_clustering']
     # original problem
-  #  network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
-        #          how=how, normed=False)
+    network, df_cluster=run(network=network.copy(), args=args, path=resultspath, write_results=write_results, n_clusters=None,
+                  how=how, normed=False, extremePeriodMethod = extremePeriodMethod, clusterMethod=clusterMethod)
     
     network_original=network.copy()
     
@@ -66,12 +66,28 @@ def snapshot_clustering(network, args, how='daily'):
     return network, df_cluster
 
 
-def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
+def tsam_cluster(timeseries_df,
+                 typical_periods=10,
+                 how='daily',
+                 extremePeriodMethod = 'replace_cluster_center',
+                 clusterMethod='hierarchical'):
     """
     Parameters
     ----------
     df : pd.DataFrame
         DataFrame with timeseries to cluster
+    extremePeriodMethod: {'None','append','new_cluster_center',
+                           'replace_cluster_center'}, optional, default: 'None'
+        Method how to integrate extreme Periods
+        into to the typical period profiles.
+        None: No integration at all.
+        'append': append typical Periods to cluster centers
+        'new_cluster_center': add the extreme period as additional cluster
+            center. It is checked then for all Periods if they fit better
+            to the this new center or their original cluster center.
+        'replace_cluster_center': replaces the cluster center of the
+            cluster where the extreme period belongs to with the periodly
+            profile of the extreme period. (Worst case system design)
 
     Returns
     -------
@@ -87,9 +103,12 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
     aggregation = tsam.TimeSeriesAggregation(
         timeseries_df,
         noTypicalPeriods=typical_periods,
+        extremePeriodMethod = extremePeriodMethod,
+        addPeakMin = timeseries_df.columns,
+        addPeakMax = timeseries_df.columns,
         rescaleClusterPeriods=False,
         hoursPerPeriod=hours,
-        clusterMethod='hierarchical')
+        clusterMethod=clusterMethod)
 
     timeseries = aggregation.createTypicalPeriods()
     cluster_weights = aggregation.clusterPeriodNoOccur
@@ -116,7 +135,7 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
     dates = timeseries_df.iloc[nrhours].index 
     
     #get list of representative days   
-    representative_day=[]
+    """representative_day=[]
 
     #cluster:medoid des jeweiligen Clusters
     dic_clusterCenterIndices = dict(enumerate(clusterCenterIndices)) 
@@ -147,9 +166,9 @@ def tsam_cluster(timeseries_df, typical_periods=10, how='daily'):
             j=j+1     
     df_i_h = pd.DataFrame({'Timeseries': timeseries_df.index, 
                         'Candidate_day': nr_day}) 
-    df_i_h.set_index('Timeseries',inplace=True)
+    df_i_h.set_index('Timeseries',inplace=True)"""
 
-    return df_cluster, cluster_weights, dates, hours, df_i_h
+    return timeseries, cluster_weights, dates, hours
 
 def disaggregate_soc_results(network):
     """
@@ -197,7 +216,8 @@ def disaggregate_soc_results(network):
                     + network.storage_units_t['state_of_charge_inter'][su][day]
 
 def run(network, args, path, write_results=False, n_clusters=None, how='daily',
-        normed=False):
+        normed=False, extremePeriodMethod = 'replace_cluster_center',
+        clusterMethod='hierarchical'):
     """
     """
     
@@ -205,40 +225,43 @@ def run(network, args, path, write_results=False, n_clusters=None, how='daily',
         path=os.path.join(path, str(n_clusters))
 
         # calculate clusters
-        df_cluster, cluster_weights, dates, hours, df_i_h = tsam_cluster(
+        df_cluster, cluster_weights, dates, hours= tsam_cluster(
                 prepare_pypsa_timeseries(network),
                 typical_periods=n_clusters,
-                how='daily')       
-        network.cluster = df_cluster
-        network.cluster_ts = df_i_h
+                how='daily',
+                extremePeriodMethod = extremePeriodMethod,
+                clusterMethod=clusterMethod)       
+        #network.cluster = df_cluster
+        #network.cluster_ts = df_i_h
 
         update_data_frames(network, cluster_weights, dates, hours)
         
-        network.lopf(network.snapshots, 
-                     extra_functionality= snapshot_cluster_constraints,
-                     solver_name=args['solver'], 
-                     solver_options=args['solver_options'], 
-                     formulation = 'kirchhoff')
+        iterate_lopf(network,
+                     args,
+                     extra_functionality = daily_bounds,
+                     method={'n_iter':4}, 
+                     delta_s_max=0)
+
         
         # disaggregate soc results
-        disaggregate_soc_results(network)
+        #disaggregate_soc_results(network)
                     
     else:
         path=os.path.join(path, 'original')
         
         # network.cluster=False
         
-        network.lopf(network.snapshots,
-                     extra_functionality=None,
-                     solver_name=args['solver'], 
-                     solver_options=args['solver_options'],
-                     formulation = 'kirchhoff')
+        iterate_lopf(network,
+                     args,
+                     extra_functionality = None,
+                     method={'n_iter':4}, 
+                     delta_s_max=0)
         df_cluster=None
            
         
     
     if write_results:
-        results_to_csv(network, args, path, pf_solution=None)
+        results_to_csv(network, args, path)
         write_lpfile(network, path=os.path.join(path, 'file.lp'))
     
     return network, df_cluster
@@ -568,6 +591,7 @@ def manipulate_storage_invest(network, costs=None, wacc=0.05, lifetime=15):
     # default: 4500 € / MW, high 300 €/MW
     crf = (1 / wacc) - (wacc / ((1 + wacc) ** lifetime))
     network.storage_units.capital_cost = costs / crf
+
 
 def write_lpfile(network=None, path=None):
     network.model.write(path,

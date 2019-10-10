@@ -31,30 +31,31 @@ rel_net_expansion = {}
 for i in kmean:
     i =int(i)
     
-    resultspath = '/home/clara/Schreibtisch/snapshot_clustering_analysis/70k_4380hours_new'
+    resultspath = '/home/clara/GitHub/eTraGo/etrago/sc_analysis_week_replace_cluster_center/'
     clustered_path = path.join(resultspath, 'daily')
     original_path = path.join(resultspath, 'original')
 
     network = pd.read_csv(path.join(original_path, 'network.csv'))
-    storage_units = pd.read_csv(path.join(original_path, 'storage_units.csv'))
-    storage_expansion = storage_units.p_nom_opt[storage_units.p_nom_extendable].sum()
+    #storage_units = pd.read_csv(path.join(original_path, 'storage_units.csv'))
+   # storage_expansion = storage_units.p_nom_opt[storage_units.p_nom_extendable].sum()
     lines = pd.read_csv(path.join(original_path, 'lines.csv'))
-    links = pd.read_csv(path.join(original_path, 'links.csv'))
+    #links = pd.read_csv(path.join(original_path, 'links.csv'))
     
-    network_expansion = (lines.s_nom_opt[lines.s_nom_extendable]-lines.s_nom_min[lines.s_nom_extendable]).sum()+\
-        (links.p_nom_opt[links.p_nom_extendable]-links.p_nom_min[links.p_nom_extendable]).sum()
+    network_expansion = (lines.s_nom_opt[lines.s_nom_extendable]-lines.s_nom_min[lines.s_nom_extendable]).sum()#+\
+        #(links.p_nom_opt[links.p_nom_extendable]-links.p_nom_min[links.p_nom_extendable]).sum()
         
     for c in listdir(clustered_path): # go through the snapshot_parameters
         if c != 'Z.csv': 
             network_c = pd.read_csv(path.join(clustered_path, c, 'network.csv'))
-            storage_units_c = pd.read_csv(path.join(clustered_path, c, 'storage_units.csv'))
-            storage_expansion_c = storage_units_c.p_nom_opt[storage_units_c.p_nom_extendable].sum()
+           # storage_units_c = pd.read_csv(path.join(clustered_path, c, 'storage_units.csv'))
+           # storage_expansion_c = storage_units_c.p_nom_opt[storage_units_c.p_nom_extendable].sum()
 
             lines_c = pd.read_csv(path.join(clustered_path, c, 'lines.csv'))
-            links_c = pd.read_csv(path.join(clustered_path, c,'links.csv'))
+            
+            #links_c = pd.read_csv(path.join(clustered_path, c,'links.csv'))
     
-            network_expansion_c = (lines_c.s_nom_opt[lines_c.s_nom_extendable]-lines_c.s_nom_min[lines_c.s_nom_extendable]).sum()+\
-                (links_c.p_nom_opt[links_c.p_nom_extendable]-links_c.p_nom_min[links_c.p_nom_extendable]).sum()
+            network_expansion_c = (lines_c.s_nom_opt[lines_c.s_nom_extendable]-lines_c.s_nom_min[lines_c.s_nom_extendable]).sum()#+\
+                #(links_c.p_nom_opt[links_c.p_nom_extendable]-links_c.p_nom_min[links_c.p_nom_extendable]).sum()
 
             abs_err[str(c)] = network_c['objective'].values[0]
             rel_err[str(c)] = ((abs(network['objective'].values[0] -
@@ -65,10 +66,10 @@ for i in kmean:
                                 float(network['time']) * 100)
             benchmark_time[str(c)] = float(network['time'])
             benchmark_objective[str(c)] = network['objective'].values[0]
-            abs_su_expansion[str(c)] = storage_expansion_c
-            rel_su_expansion[str(c)] = ((abs(storage_expansion -
-                                storage_expansion_c)) /
-                                storage_expansion * 100)
+           # abs_su_expansion[str(c)] = storage_expansion_c
+          #  rel_su_expansion[str(c)] = ((abs(storage_expansion -
+                         #       storage_expansion_c)) /
+                         #       storage_expansion * 100)
             
             abs_net_expansion[str(c)] = network_expansion_c
             rel_net_expansion[str(c)] = ((abs(network_expansion -
@@ -82,8 +83,8 @@ for i in kmean:
                         '4_time_abs': abs_time,
                         '5_time_rel': rel_time,
                         '6_time_benchmark':benchmark_time,
-                        '7_abs_storage_expansion': abs_su_expansion,
-                        '8_rel_storage_expansion': rel_su_expansion,
+                       # '7_abs_storage_expansion': abs_su_expansion,
+                        ##'8_rel_storage_expansion': rel_su_expansion,
                         '9_abs_network_expansion': abs_net_expansion,
                         '10_rel_network_expansion': rel_net_expansion
                         })
@@ -118,8 +119,8 @@ plot_2d('1_obj_abs',name='absolute objective function')
 plot_2d('2_obj_rel',name='relative objective function deviation in %')"""
 
 
-plot_2d('7_abs_storage_expansion',name='absolute storage expansion in MW')
-plot_2d('8_rel_storage_expansion',name='relative storage expansion deviation in %')
+#plot_2d('7_abs_storage_expansion',name='absolute storage expansion in MW')
+#plot_2d('8_rel_storage_expansion',name='relative storage expansion deviation in %')
 
 plot_2d('9_abs_network_expansion',name='absolute network expansion in MW')
 plot_2d('10_rel_network_expansion',name='relative network expansion deviation in %')
