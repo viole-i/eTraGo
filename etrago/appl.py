@@ -114,7 +114,7 @@ args = {
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
     'start_snapshot': 1,
-    'end_snapshot': 168,
+    'end_snapshot': 96,
     'solver': 'gurobi',  # glpk, cplex or gurobi
     'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5,
                        'logFile': 'solver.log'},  # {} for default options
@@ -138,7 +138,8 @@ args = {
     'load_cluster': 'cluster_coord_k_10_result',  # False or predefined busmap for k-means
     'network_clustering_ehv': False,  # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
-    'snapshot_clustering': [2,3,4,5,7], # False or the number of 'periods'
+    'snapshot_clustering': [2,3], # False or the number of 'periods'
+    'sc_settings':{'extremePeriodMethod':'new_cluster_center', 'clusterMethod':'hierarchical'},
     # Simplifications:
     'parallelisation': False,  # run snapshots parallely.
     'skip_snapshots': False,
@@ -554,7 +555,8 @@ def etrago(args):
     elif not args['snapshot_clustering'] is False:
         network, df_cluster = snapshot_clustering(
             network, args, how='daily',
-            extremePeriodMethod = 'None', clusterMethod='hierarchical')
+            extremePeriodMethod = args['sc_settings']['extremePeriodMethod'], 
+            clusterMethod=args['sc_settings']['clusterMethod'])
         
     # start linear optimal powerflow calculations
     elif args['method'] == 'lopf':
