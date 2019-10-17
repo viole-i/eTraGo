@@ -113,11 +113,11 @@ args = {
     'gridversion': 'v0.4.6',  # None for model_draft or Version number
     'method': 'lopf',  # lopf or pf
     'pf_post_lopf': False,  # perform a pf after a lopf simulation
-    'start_snapshot': 12,
-    'end_snapshot': 13,
+    'start_snapshot': 1,
+    'end_snapshot':8760,
     'solver': 'gurobi',  # glpk, cplex or gurobi
-    'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'method':2, 'crossover':0,
-                       'logFile': 'solver.log'},  # {} for default options
+    'solver_options': {'BarConvTol': 1.e-5, 'FeasibilityTol': 1.e-5, 'method':2, 'crossover':0,'threads':4,
+                       'logFile': '/home/student/Clara/AuswertungSnapshotClustering/Netzausbau/ehv_50k_solver.log'},  # {} for default options
     'model_formulation': 'kirchhoff', # angles or kirchhoff
     'scn_name': 'NEP 2035',  # a scenario: Status Quo, NEP 2035, eGo 100
     # Scenario variations:
@@ -125,7 +125,7 @@ args = {
     'scn_decommissioning': None,  # None or decommissioning scenario
     # Export options:
     'lpfile': False,  # save pyomo's lp file: False or /path/tofolder
-    'csv_export': False,  # save results as csv: False or /path/tofolder
+    'csv_export': '/home/student/Clara/AuswertungSnapshotClustering/Netzausbau/ehv_50k',  # save results as csv: False or /path/tofolder
     'db_export': False,  # export the results back to the oedb
     # Settings:
     'extendable': ['network'],  # Array of components to optimize
@@ -135,11 +135,11 @@ args = {
     'extra_functionality': {},  # Choose function name or None
     # Clustering:
     'network_clustering_kmeans': 50,  # False or the value k for clustering
-    'load_cluster': 'cluster_coord_k_50_result',  # False or predefined busmap for k-means
-    'network_clustering_ehv': False,  # clustering of HV buses to EHV buses.
+    'load_cluster': False,  # False or predefined busmap for k-means
+    'network_clustering_ehv': True,  # clustering of HV buses to EHV buses.
     'disaggregation': None,  # None, 'mini' or 'uniform'
-    'snapshot_clustering': [2,3], # False or the number of 'periods'
-    'sc_settings':{'extremePeriodMethod':'new_cluster_center', 'clusterMethod':'hierarchical'},
+    'snapshot_clustering': [5,7,10,15,20,40], # False or the number of 'periods'
+    'sc_settings':{'extremePeriodMethod':'None', 'clusterMethod':'hierarchical'},
     # Simplifications:
     'parallelisation': False,  # run snapshots parallely.
     'skip_snapshots': False,
@@ -513,7 +513,8 @@ def etrago(args):
                 scn_name=(
                         args['scn_name'] if args['scn_extension']==None
                         else args['scn_name']+'_ext_'+'_'.join(
-                                args['scn_extension'])))
+                                args['scn_extension'])),
+                version = args['gridversion'])
         network = cluster_on_extra_high_voltage(
             network, busmap, with_time=True)
 
@@ -527,7 +528,7 @@ def etrago(args):
                 remove_stubs=False,
                 use_reduced_coordinates=False,
                 bus_weight_tocsv=None,
-                bus_weight_fromcsv=None,
+                bus_weight_fromcsv='/home/student/Clara/NEP/weighting_ehv_sq.csv',
                 n_init=10,
                 max_iter=100,
                 tol=1e-6,
