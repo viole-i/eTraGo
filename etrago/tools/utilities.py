@@ -97,6 +97,117 @@ def buses_grid_linked(network, voltage_level):
 
     return df.index
 
+def geolocation_buses_oop(self):
+    """
+     If geopandas is installed:
+     Use Geometries of buses x/y(lon/lat) and Polygons
+     of Countries from RenpassGisParameterRegion
+     in order to locate the buses
+
+     Else:
+     Use coordinats of buses to locate foreign buses, which is less accurate.
+
+     Parameters
+     ----------
+     network_etrago: : class: `etrago.tools.io.NetworkScenario`
+         eTraGo network object compiled by: meth: `etrago.appl.etrago`
+     session: : sqlalchemy: `sqlalchemy.orm.session.Session < orm/session_basics.html >`
+         SQLAlchemy session to the OEDB
+
+    """
+    if geopandas:
+        # Start db connetion
+        # get renpassG!S scenario data
+
+        RenpassGISRegion = RenpassGisParameterRegion
+
+        # Define regions
+        region_id = ['DE', 'DK', 'FR', 'BE', 'LU', 'AT',
+                     'NO', 'PL', 'CH', 'CZ', 'SE', 'NL']
+
+        query = self.session.query(RenpassGISRegion.gid,
+                              RenpassGISRegion.u_region_id,
+                              RenpassGISRegion.stat_level,
+                              RenpassGISRegion.geom,
+                              RenpassGISRegion.geom_point)
+
+        # get regions by query and filter
+        Regions = [(gid, u_region_id, stat_level, geoalchemy2.shape.to_shape(
+                 geom), geoalchemy2.shape.to_shape(geom_point))
+                 for gid, u_region_id, stat_level,
+                geom, geom_point in query.filter(RenpassGISRegion.u_region_id.
+                                                 in_(region_id)).all()]
+
+        crs = {'init': 'epsg:4326'}
+        # transform lon lat to shapely Points and create GeoDataFrame
+        points = [Point(xy) for xy in zip(self.buses.x,  self.buses.y)]
+        bus = gpd.GeoDataFrame(self.buses, crs=crs, geometry=points)
+        # Transform Countries Polygons as Regions
+        region = pd.DataFrame(
+                 Regions, columns=['id', 'country', 'stat_level', 'Polygon',
+                                   'Point'])
+        re = gpd.GeoDataFrame(region, crs=crs, geometry=region['Polygon'])
+        # join regions and buses by geometry which intersects
+        busC = gpd.sjoin(bus, re, how='inner', op='intersects')
+        # busC
+        # Drop non used columns
+        busC = busC.drop(['index_right', 'Point', 'id', 'Polygon',
+                       'stat_level', 'geometry'], axis=1)
+        # add busC to eTraGo.buses
+        self.buses['country_code'] = busC['country']
+        self.buses.country_code[self.buses.country_code.isnull()] = 'DE'
+        # close session 
+        self.session.close()
+
+    else:
+
+        buses_by_country(self)
+
+    transborder_lines_0 = self.lines[self.lines['bus0'].isin(
+            self.buses.index[self.buses['country_code'] != 'DE'])].index
+    transborder_lines_1 = self.lines[self.lines['bus1'].isin(
+            self.buses.index[self.buses['country_code']!= 'DE'])].index
+
+    #set country tag for lines
+    self.lines.loc[transborder_lines_0, 'country'] = \
+        self.buses.loc[self.lines.loc[transborder_lines_0, 'bus0'].\
+                          values,'country_code'].values
+
+    self.lines.loc[transborder_lines_1, 'country'] = \
+        self.buses.loc[self.lines.loc[transborder_lines_1, 'bus1'].\
+                          values,'country_code'].values
+    self.lines['country'].fillna('DE', inplace=True)
+    doubles = list(set(transborder_lines_0.intersection(transborder_lines_1)))
+    for line in doubles:
+        c_bus0 = self.buses.loc[self.lines.loc[line, 'bus0'],
+                                   'country_code']
+        c_bus1 = self.buses.loc[self.lines.loc[line, 'bus1'],
+                                   'country_code']
+        self.lines.loc[line, 'country'] = '{}{}'.format(c_bus0, c_bus1)
+  
+    transborder_links_0 = self.links[self.links['bus0'].isin(
+            self.buses.index[self.buses['country_code']!= 'DE'])].index
+    transborder_links_1 = self.links[self.links['bus1'].isin(
+            self.buses.index[self.buses['country_code'] != 'DE'])].index
+
+    #set country tag for links
+    self.links.loc[transborder_links_0, 'country'] = \
+        self.buses.loc[self.links.loc[transborder_links_0, 'bus0'].\
+                          values, 'country_code'].values
+
+    self.links.loc[transborder_links_1, 'country'] = \
+        self.buses.loc[self.links.loc[transborder_links_1, 'bus1'].\
+                          values, 'country_code'].values
+    self.links['country'].fillna('DE', inplace=True)
+    doubles = list(set(transborder_links_0.intersection(transborder_links_1)))
+    for link in doubles:
+        c_bus0 = self.buses.loc[
+                self.links.loc[link, 'bus0'], 'country_code']
+        c_bus1 = self.buses.loc[
+                self.links.loc[link, 'bus1'], 'country_code']
+        self.links.loc[link, 'country'] = '{}{}'.format(c_bus0, c_bus1)
+
+
 
 def geolocation_buses(network, session):
     """
@@ -1383,7 +1494,7 @@ def add_missing_components(network):
     return network
 
 
-def convert_capital_costs(network, start_snapshot, end_snapshot, p=0.05, T=40):
+def convert_capital_costs(network, p=0.05, T=40):
     """ Convert capital_costs to fit to pypsa and caluculated time
     
     Parameters
@@ -1395,6 +1506,8 @@ def convert_capital_costs(network, start_snapshot, end_snapshot, p=0.05, T=40):
     -------
 
     """
+    start_snapshot = network.args['start_snapshot']
+    end_snapshot = network.args['end_snapshot']
     # Add costs for DC-converter
     network.links.capital_cost = network.links.capital_cost + 400000
 
@@ -1558,7 +1671,7 @@ def set_random_noise(network, seed, sigma = 0.01):
         standard deviation, small values reduce impact on dispatch
         but might lead to numerical instability
     """
-    s = np.random.RandomState(seed)
+    s = np.random.RandomState(network.args['generator_noise'])
     network.generators.marginal_cost[network.generators.bus.isin(
                 network.buses.index[network.buses.country_code == 'DE'])] += \
             abs(s.normal(0, sigma, len(network.generators.marginal_cost[
@@ -1729,7 +1842,7 @@ def crossborder_capacity(network, method, capacity_factor):
                 [country]*capacity_factor
 
 
-def set_branch_capacity(network, args):
+def set_branch_capacity(network):
 
     """
     Set branch capacity factor of lines and transformers, different factors for
@@ -1737,10 +1850,9 @@ def set_branch_capacity(network, args):
 
     Parameters
     ----------
-    network : :class:`pypsa.Network
-        Overall container of PyPSA
-    args: dict
-        Settings in appl.py
+    network : :class:`etrago.Network
+        Overall container of Etrago
+
 
     """
 
@@ -1748,22 +1860,20 @@ def set_branch_capacity(network, args):
 
     network.transformers["s_nom_total"] = network.transformers.s_nom.copy()
 
-    network.lines["v_nom"] = network.lines.bus0.map(
-        network.buses.v_nom)
     network.transformers["v_nom0"] = network.transformers.bus0.map(
         network.buses.v_nom)
 
     network.lines.s_nom[network.lines.v_nom == 110] = \
-        network.lines.s_nom * args['branch_capacity_factor']['HV']
+        network.lines.s_nom * network.args['branch_capacity_factor']['HV']
 
     network.lines.s_nom[network.lines.v_nom > 110] = \
-        network.lines.s_nom * args['branch_capacity_factor']['eHV']
+        network.lines.s_nom * network.args['branch_capacity_factor']['eHV']
 
     network.transformers.s_nom[network.transformers.v_nom0 == 110]\
-        = network.transformers.s_nom * args['branch_capacity_factor']['HV']
+        = network.transformers.s_nom * network.args['branch_capacity_factor']['HV']
 
     network.transformers.s_nom[network.transformers.v_nom0 > 110]\
-        = network.transformers.s_nom * args['branch_capacity_factor']['eHV']
+        = network.transformers.s_nom * network.args['branch_capacity_factor']['eHV']
      
 
 def update_electrical_parameters(network, l_snom_pre, t_snom_pre):

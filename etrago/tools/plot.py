@@ -2028,6 +2028,47 @@ def storage_soc_sorted(network, filename = None):
 
     return
     
+def plot_grid(self, line_color, boundaries=None):
+
+        if line_color=='line_loading':
+            title='Line loading in percent'
+            
+            line_colors={'Line':(self.lines_t.p0/self.lines.s_nom_opt).abs().mean(),
+                         'Link':(self.links_t.p0/self.links.p_nom_opt).abs().mean()}
+            boundaries=[0,1]
+            label='line loading in p.u.'
+            
+
+        elif line_color=='v_nom':
+              title='Voltage levels'
+              label='v_nom in kV'
+              line_colors={'Line':self.lines.v_nom,
+                           'Link':self.links.v_nom}
+              boundaries=[110, 450]
+        
+        elif line_color=='expansion':
+            title='Network expansion'
+            label='additional capacity in MW'
+            line_colors={'Line':self.lines.s_nom_opt-self.lines.s_nom_min,
+                         'Link':self.links.p_nom_opt-self.links.p_nom_min}
+        else:
+            return
+            
+        if not boundaries:
+            df = pd.DataFrame(line_colors)
+            v = np.linspace(df.min().min(), df.max().max(), 101)
+            boundaries = [df.min().min(), df.max().max()]
+        
+        else:
+            v = np.linspace(boundaries[0], boundaries[1], 101)
+        
+
+        ll=self.plot(line_colors=line_colors, 
+                line_cmap={'Line':plt.cm.jet, 'Link': plt.cm.jet},
+                title=title)
+        
+        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb.set_label(label)
 set_epsg_network.counter = 0
 
 if __name__ == '__main__':

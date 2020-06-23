@@ -27,9 +27,10 @@ if 'READTHEDOCS' not in os.environ:
     from pypsa.networkclustering import (aggregatebuses, aggregateoneport,
                                          aggregategenerators,
                                          get_clustering_from_busmap,
-                                         busmap_by_kmeans, busmap_by_stubs)
+                                         busmap_by_kmeans, busmap_by_stubs,
+                                         get_buses_linemap_and_lines)
     from egoio.db_tables.model_draft import EgoGridPfHvBusmap
-
+    from etrago.network import Etrago
     from itertools import product
     import networkx as nx
     import multiprocessing as mp
@@ -42,6 +43,7 @@ if 'READTHEDOCS' not in os.environ:
     import pypsa.components as components
     from six import iteritems
     from sqlalchemy import or_, exists
+    from collections import namedtuple
 
 __copyright__ = ("Flensburg University of Applied Sciences, "
                  "Europa-Universität Flensburg, "
@@ -385,8 +387,76 @@ def busmap_from_psql(network, session, scn_name, version):
 
     return busmap
 
+def etrago_get_clustering_from_busmap(network, busmap, with_time=True, line_length_factor=1.0,
+                               aggregate_generators_weighted=False, aggregate_one_ports={},
+                               bus_strategies=dict(), line_agg=True):
 
-def kmean_clustering(network, n_clusters=10, load_cluster=False,
+    buses, linemap, linemap_p, linemap_n, lines = get_buses_linemap_and_lines(network, busmap, line_length_factor, bus_strategies, line_agg)
+
+    network_c = Etrago(network.args, empty_network=True)
+
+    io.import_components_from_dataframe(network_c, buses, "Bus")
+    io.import_components_from_dataframe(network_c, lines, "Line")
+
+    if with_time:
+        network_c.set_snapshots(network.snapshots)
+        network_c.snapshot_weightings = network.snapshot_weightings.copy()
+
+    one_port_components = components.one_port_components.copy()
+
+    if aggregate_generators_weighted:
+        one_port_components.remove("Generator")
+        generators, generators_pnl = aggregategenerators(network, busmap, with_time=with_time)
+        io.import_components_from_dataframe(network_c, generators, "Generator")
+        if with_time:
+            for attr, df in iteritems(generators_pnl):
+                if not df.empty:
+                    io.import_series_from_dataframe(network_c, df, "Generator", attr)
+
+    for one_port in aggregate_one_ports:
+        one_port_components.remove(one_port)
+        new_df, new_pnl = aggregateoneport(network, busmap, component=one_port, with_time=with_time)
+        io.import_components_from_dataframe(network_c, new_df, one_port)
+        for attr, df in iteritems(new_pnl):
+            io.import_series_from_dataframe(network_c, df, one_port, attr)
+
+
+    ##
+    # Collect remaining one ports
+
+    for c in network.iterate_components(one_port_components):
+        io.import_components_from_dataframe(
+            network_c,
+            c.df.assign(bus=c.df.bus.map(busmap)).dropna(subset=['bus']),
+            c.name
+        )
+
+    if with_time:
+        for c in network.iterate_components(one_port_components):
+            for attr, df in iteritems(c.pnl):
+                if not df.empty:
+                    io.import_series_from_dataframe(network_c, df, c.name, attr)
+
+    new_links = (network.links.assign(bus0=network.links.bus0.map(busmap),
+                                      bus1=network.links.bus1.map(busmap))
+                        .dropna(subset=['bus0', 'bus1'])
+                        .loc[lambda df: df.bus0 != df.bus1])
+    io.import_components_from_dataframe(network_c, new_links, "Link")
+
+    if with_time:
+        for attr, df in iteritems(network.links_t):
+            if not df.empty:
+                io.import_series_from_dataframe(network_c, df, "Link", attr)
+
+    io.import_components_from_dataframe(network_c, network.carriers, "Carrier")
+
+    network_c.determine_network_topology()
+
+    return Clustering(network_c, busmap, linemap, linemap_p, linemap_n)
+
+Clustering = namedtuple('Clustering', ['network', 'busmap', 'linemap',
+                                       'linemap_positive', 'linemap_negative'])
+def kmean_clustering(network, 
                      line_length_factor=1.25,
                      remove_stubs=False, use_reduced_coordinates=False,
                      bus_weight_tocsv=None, bus_weight_fromcsv=None,
@@ -558,8 +628,8 @@ def kmean_clustering(network, n_clusters=10, load_cluster=False,
     busmap = busmap_by_kmeans(
         network,
         bus_weightings=pd.Series(weight),
-        n_clusters=n_clusters,
-        load_cluster=load_cluster,
+        n_clusters=network.args['network_clustering_kmeans'],#n_clusters,
+        load_cluster=network.args['load_cluster'],
         n_init=n_init,
         max_iter=max_iter,
         tol=tol,
@@ -569,7 +639,7 @@ def kmean_clustering(network, n_clusters=10, load_cluster=False,
     network.generators['weight'] = network.generators['p_nom']
     aggregate_one_ports = components.one_port_components.copy()
     aggregate_one_ports.discard('Generator')
-    clustering = get_clustering_from_busmap(
+    clustering = etrago_get_clustering_from_busmap(
         network,
         busmap,
         aggregate_generators_weighted=True,

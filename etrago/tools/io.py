@@ -319,10 +319,12 @@ class NetworkScenario(ScenarioBase):
         # future PyPSA changes from PyPSA's v0.6 on. This concept should be
         # replaced, when the oedb has a revision system in place, because
         # sometime this will break!!!
-
+        #import pdb; pdb.set_trace()
         if network != None:
             network = network
-
+            
+            print(pypsa.__version__)
+            network.set_snapshots(self.timeindex)
         else:
             network = pypsa.Network()
             network.set_snapshots(self.timeindex)
